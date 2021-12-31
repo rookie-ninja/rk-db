@@ -1,0 +1,18 @@
+---
+gin:
+  - name: user-service
+    port: 8080
+    enabled: true
+mySql:
+  - name: user-db
+    enabled: true
+    enableHealthCheck: true
+    locale: "*::*::*::*"
+    user: root
+    pass: pass
+    addr: "localhost:3306"
+    database: user
+    params:
+      - "charset=utf8mb4"
+      - "parseTime=True"
+      - "loc=Local"
