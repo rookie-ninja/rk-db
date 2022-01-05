@@ -1,17 +1,19 @@
+// Copyright (c) 2021 rookie-ninja
+//
+// Use of this source code is governed by an Apache-style
+// license that can be found in the LICENSE file.
+
+// Package rkmysql is an implementation of rkentry.Entry which could be used gorm.DB instance.
 package rkmysql
 
 import (
 	"context"
-	"database/sql"
-	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/rookie-ninja/rk-common/common"
 	"github.com/rookie-ninja/rk-entry/entry"
 	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapgrpc"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -23,9 +25,18 @@ import (
 
 const (
 	// EncodingConsole console encoding style of logging
-	EncodingConsole int = 0
+	EncodingConsole = "console"
 	// EncodingJson console encoding style of logging
-	EncodingJson int = 1
+	EncodingJson = "json"
+
+	// LoggerLevelSilent set logger level of gorm as silent
+	LoggerLevelSilent = "silent"
+	// LoggerLevelError set logger level of gorm as error
+	LoggerLevelError = "error"
+	// LoggerLevelWarn set logger level of gorm as warn
+	LoggerLevelWarn = "warn"
+	// LoggerLevelInfo set logger level of gorm as info
+	LoggerLevelInfo = "info"
 )
 
 // This must be declared in order to register registration function into rk context
@@ -38,47 +49,51 @@ func init() {
 // MySql entry boot config which reflects to YAML config
 type BootConfig struct {
 	MySql []struct {
-		Enabled           bool     `yaml:"enabled" json:"enabled"`
-		Name              string   `yaml:"name" json:"name"`
-		Description       string   `yaml:"description" json:"description"`
-		EnableMockDb      bool     `yaml:"enableMockDb" json:"enableMockDb"`
-		EnableHealthCheck bool     `yaml:"enableHealthCheck" json:"enableHealthCheck"`
-		Locale            string   `yaml:"locale" json:"locale"`
-		User              string   `yaml:"user" json:"user"`
-		Pass              string   `yaml:"pass" json:"pass"`
-		Protocol          string   `yaml:"protocol" json:"protocol"`
-		Addr              string   `yaml:"addr" json:"addr"`
-		Database          string   `yaml:"database" json:"database"`
-		Params            []string `yaml:"params" json:"params"`
-		LoggerEncoding    string   `yaml:"loggerEncoding" json:"loggerEncoding"`
-		LoggerOutputPaths []string `yaml:"loggerOutputPaths" json:"loggerOutputPaths"`
+		Enabled     bool   `yaml:"enabled" json:"enabled"`
+		Name        string `yaml:"name" json:"name"`
+		Description string `yaml:"description" json:"description"`
+		Locale      string `yaml:"locale" json:"locale"`
+		User        string `yaml:"user" json:"user"`
+		Pass        string `yaml:"pass" json:"pass"`
+		Protocol    string `yaml:"protocol" json:"protocol"`
+		Addr        string `yaml:"addr" json:"addr"`
+		Database    []struct {
+			Name       string   `yaml:"name" json:"name"`
+			Params     []string `yaml:"params" json:"params"`
+			DryRun     bool     `yaml:"dryRun" json:"dryRun"`
+			AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
+		} `yaml:"database" json:"database"`
+		Logger struct {
+			Encoding    string   `yaml:"encoding" json:"encoding"`
+			Level       string   `yaml:"level" json:"level"`
+			OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
+		}
 	} `yaml:"mySql" json:"mySql"`
 }
 
 // MySqlEntry will init gorm.DB or SqlMock with provided arguments
 type MySqlEntry struct {
-	EntryName         string                  `json:"entryName" yaml:"entryName"`
-	EntryType         string                  `json:"entryType" yaml:"entryType"`
-	EntryDescription  string                  `json:"-" yaml:"-"`
-	zapLoggerEntry    *rkentry.ZapLoggerEntry `json:"-" yaml:"-"`
-	loggerEncoding    int                     `json:"-" yaml:"-"`
-	loggerOutputPath  []string                `json:"-" yaml:"-"`
-	Logger            *zapgrpc.Logger         `json:"-" yaml:"-"`
-	User              string                  `yaml:"user" json:"user"`
-	pass              string                  `yaml:"-" json:"-"`
-	protocol          string                  `yaml:"-" json:"-"`
-	addr              string                  `yaml:"addr" json:"addr"`
-	database          string                  `yaml:"database" json:"database"`
-	params            []string                `yaml:"-" json:"-"`
-	GormDB            *gorm.DB                `yaml:"-" json:"-"`
-	GormConfig        *gorm.Config            `yaml:"-" json:"-"`
-	GormAutoMigrate   []interface{}           `yaml:"-" json:"-"`
-	enableMockDb      bool                    `yaml:"enableMockDb" json:"enableMockDb"`
-	enableHealthCheck bool                    `yaml:"enableHealthCheck" json:"enableHealthCheck"`
-	healthCheckTicker *time.Ticker            `yaml:"-" json:"-"`
-	healthCheckSignal chan bool               `yaml:"-" json:"-"`
-	SqlMock           sqlmock.Sqlmock         `yaml:"-" json:"-"`
-	nowFunc           func() time.Time        `yaml:"-" json:"-"`
+	EntryName        string                  `yaml:"entryName" yaml:"entryName"`
+	EntryType        string                  `yaml:"entryType" yaml:"entryType"`
+	EntryDescription string                  `yaml:"-" json:"-"`
+	User             string                  `yaml:"user" json:"user"`
+	pass             string                  `yaml:"-" json:"-"`
+	loggerEncoding   string                  `yaml:"-" json:"-"`
+	loggerOutputPath []string                `yaml:"-" json:"-"`
+	loggerLevel      string                  `yaml:"-" json:"-"`
+	Logger           *zap.Logger             `yaml:"-" json:"-"`
+	Protocol         string                  `yaml:"protocol" json:"protocol"`
+	Addr             string                  `yaml:"addr" json:"addr"`
+	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
+	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
+	GormConfigMap    map[string]*gorm.Config `yaml:"-" json:"-"`
+}
+
+type databaseInner struct {
+	name       string
+	dryRun     bool
+	autoCreate bool
+	params     []string
 }
 
 // DataStore will be extended in future.
@@ -120,7 +135,7 @@ func WithPass(pass string) Option {
 func WithProtocol(protocol string) Option {
 	return func(m *MySqlEntry) {
 		if len(protocol) > 0 {
-			m.protocol = protocol
+			m.Protocol = protocol
 		}
 	}
 }
@@ -129,64 +144,44 @@ func WithProtocol(protocol string) Option {
 func WithAddr(addr string) Option {
 	return func(m *MySqlEntry) {
 		if len(addr) > 0 {
-			m.addr = addr
+			m.Addr = addr
 		}
-	}
-}
-
-// WithEnableHealthCheck enable health check or not
-func WithEnableHealthCheck(enable bool) Option {
-	return func(m *MySqlEntry) {
-		m.enableHealthCheck = enable
 	}
 }
 
 // WithDatabase provide database
-func WithDatabase(database string) Option {
+func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option {
 	return func(m *MySqlEntry) {
-		if len(database) > 0 {
-			m.database = database
+		if len(name) < 1 {
+			return
 		}
-	}
-}
 
-// WithParams provide params
-func WithParams(params ...string) Option {
-	return func(m *MySqlEntry) {
-		if len(params) > 0 {
-			m.params = append(m.params, params...)
+		innerDb := &databaseInner{
+			name:       name,
+			dryRun:     dryRun,
+			autoCreate: autoCreate,
+			params:     make([]string, 0),
 		}
-	}
-}
 
-// WithEnableMockDb enables mock DB
-func WithEnableMockDb(enable bool) Option {
-	return func(m *MySqlEntry) {
-		m.enableMockDb = enable
-	}
-}
-
-// WithNowFunc provides now functions for unit test
-func WithNowFunc(f func() time.Time) Option {
-	return func(m *MySqlEntry) {
-		m.nowFunc = f
-	}
-}
-
-// WithZapLoggerEntry provide rkentry.ZapLoggerEntry.
-func WithZapLoggerEntry(zapLoggerEntry *rkentry.ZapLoggerEntry) Option {
-	return func(m *MySqlEntry) {
-		if zapLoggerEntry != nil {
-			m.zapLoggerEntry = zapLoggerEntry
+		// add default params if no param provided
+		if len(params) < 1 {
+			innerDb.params = append(innerDb.params,
+				"charset=utf8mb4",
+				"parseTime=True",
+				"loc=Local")
+		} else {
+			innerDb.params = append(innerDb.params, params...)
 		}
+
+		m.innerDbList = append(m.innerDbList, innerDb)
 	}
 }
 
 // WithLoggerEncoding provide console=0, json=1.
 // json or console is supported.
-func WithLoggerEncoding(ec int) Option {
+func WithLoggerEncoding(ec string) Option {
 	return func(m *MySqlEntry) {
-		m.loggerEncoding = ec
+		m.loggerEncoding = strings.ToLower(ec)
 	}
 }
 
@@ -195,6 +190,14 @@ func WithLoggerEncoding(ec int) Option {
 func WithLoggerOutputPaths(path ...string) Option {
 	return func(m *MySqlEntry) {
 		m.loggerOutputPath = append(m.loggerOutputPath, path...)
+	}
+}
+
+// WithLoggerLevel provide logger level in gorm
+// Available options are silent, error, warn, info which matches gorm.logger
+func WithLoggerLevel(level string) Option {
+	return func(m *MySqlEntry) {
+		m.loggerLevel = strings.ToLower(level)
 	}
 }
 
@@ -218,18 +221,14 @@ func RegisterMySqlEntriesWithConfig(configFilePath string) map[string]rkentry.En
 			WithPass(element.Pass),
 			WithProtocol(element.Protocol),
 			WithAddr(element.Addr),
-			WithEnableHealthCheck(element.EnableHealthCheck),
-			WithDatabase(element.Database),
-			WithParams(element.Params...),
-			WithEnableMockDb(element.EnableMockDb),
+			WithLoggerEncoding(element.Logger.Encoding),
+			WithLoggerOutputPaths(element.Logger.OutputPaths...),
+			WithLoggerLevel(element.Logger.Level),
 		}
 
-		if strings.ToLower(element.LoggerEncoding) == "json" {
-			opts = append(opts, WithLoggerEncoding(EncodingJson))
-		}
-
-		if len(element.LoggerOutputPaths) > 0 {
-			opts = append(opts, WithLoggerOutputPaths(element.LoggerOutputPaths...))
+		// iterate database section
+		for _, db := range element.Database {
+			opts = append(opts, WithDatabase(db.Name, db.DryRun, db.AutoCreate, db.Params...))
 		}
 
 		entry := RegisterMySqlEntry(opts...)
@@ -240,22 +239,22 @@ func RegisterMySqlEntriesWithConfig(configFilePath string) map[string]rkentry.En
 	return res
 }
 
-// RegisterEntry will register Entry into GlobalAppCtx
+// RegisterMySqlEntry will register Entry into GlobalAppCtx
 func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 	entry := &MySqlEntry{
 		EntryName:        "MySql",
 		EntryType:        "MySql",
-		EntryDescription: "",
-		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
+		EntryDescription: "MySql entry for gorm.DB",
 		User:             "root",
 		pass:             "pass",
-		protocol:         "tcp",
-		addr:             "localhost:3306",
-		database:         "sys",
-		params:           make([]string, 0),
+		Protocol:         "tcp",
+		Addr:             "localhost:3306",
+		innerDbList:      make([]*databaseInner, 0),
 		loggerOutputPath: make([]string, 0),
-		GormConfig:       &gorm.Config{},
-		GormAutoMigrate:  make([]interface{}, 0),
+		loggerEncoding:   EncodingConsole,
+		loggerLevel:      LoggerLevelWarn,
+		GormDbMap:        make(map[string]*gorm.DB),
+		GormConfigMap:    make(map[string]*gorm.Config),
 	}
 
 	for i := range opts {
@@ -263,51 +262,65 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 	}
 
 	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s, DB addr:%s, user:%s, DB:%s",
+		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
 			entry.EntryType,
 			entry.EntryName,
-			entry.addr,
-			entry.User,
-			entry.database)
+			entry.Addr,
+			entry.User)
 	}
 
 	// Override zap logger encoding and output path if provided by user
 	// Override encoding type
+	zapLoggerConfig := rklogger.NewZapStdoutConfig()
+	lumberjackConfig := rklogger.NewLumberjackConfigDefault()
 	if entry.loggerEncoding == EncodingJson || len(entry.loggerOutputPath) > 0 {
-		zapConfig := copyZapLoggerConfig(entry.zapLoggerEntry.LoggerConfig)
-		lumberjackConfig := entry.zapLoggerEntry.LumberjackConfig
-
 		if entry.loggerEncoding == EncodingJson {
-			zapConfig.Encoding = "json"
+			zapLoggerConfig.Encoding = "json"
 		}
 
 		if len(entry.loggerOutputPath) > 0 {
-			zapConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
+			zapLoggerConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
 		}
+
+		fmt.Println(zapLoggerConfig.OutputPaths)
 
 		if lumberjackConfig == nil {
 			lumberjackConfig = rklogger.NewLumberjackConfigDefault()
 		}
-
-		if logger, err := rklogger.NewZapLoggerWithConf(zapConfig, lumberjackConfig); err != nil {
-			rkcommon.ShutdownWithError(err)
-		} else {
-			entry.Logger = zapgrpc.NewLogger(logger)
-		}
-	} else {
-		entry.Logger = zapgrpc.NewLogger(entry.zapLoggerEntry.Logger)
 	}
 
-	entry.GormConfig.Logger = logger.New(entry.Logger, logger.Config{
-		SlowThreshold:             200 * time.Millisecond,
-		LogLevel:                  logger.Warn,
-		IgnoreRecordNotFoundError: false,
-		Colorful:                  false,
-	})
+	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig); err != nil {
+		rkcommon.ShutdownWithError(err)
+	} else {
+		entry.Logger = logger
+	}
 
-	if entry.enableHealthCheck {
-		entry.healthCheckTicker = time.NewTicker(5 * time.Second)
-		entry.healthCheckSignal = make(chan bool)
+	// convert logger level to gorm type
+	loggerLevel := logger.Warn
+	switch entry.loggerLevel {
+	case LoggerLevelSilent:
+		loggerLevel = logger.Silent
+	case LoggerLevelWarn:
+		loggerLevel = logger.Warn
+	case LoggerLevelError:
+		loggerLevel = logger.Error
+	case LoggerLevelInfo:
+		loggerLevel = logger.Info
+	default:
+		loggerLevel = logger.Warn
+	}
+
+	// create default gorm configs for databases
+	for _, innerDb := range entry.innerDbList {
+		entry.GormConfigMap[innerDb.name] = &gorm.Config{
+			Logger: logger.New(NewLogger(entry.Logger), logger.Config{
+				SlowThreshold:             200 * time.Millisecond,
+				LogLevel:                  loggerLevel,
+				IgnoreRecordNotFoundError: false,
+				Colorful:                  false,
+			}),
+			DryRun: innerDb.dryRun,
+		}
 	}
 
 	rkentry.GlobalAppCtx.AddEntry(entry)
@@ -317,43 +330,25 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 
 // Bootstrap MySqlEntry
 func (entry *MySqlEntry) Bootstrap(ctx context.Context) {
-	entry.Logger.Println("Bootstrap mysql entry")
+	entry.Logger.Info("Bootstrap mysql entry",
+		zap.String("entryName", entry.EntryName),
+		zap.String("mySqlUser", entry.User),
+		zap.String("mySqlAddr", entry.Addr))
 
-	// Create db if missing
-	if err := entry.createDbIfMissing(); err != nil {
-		entry.Logger.Printf("failed to create database", zap.Error(err))
-		rkcommon.ShutdownWithError(fmt.Errorf("failed to create database at %s:%s@%s(%s)/%s",
-			entry.User, "****", entry.protocol, entry.addr, entry.database))
-	}
-
-	// Connect to db
+	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
-		entry.Logger.Printf("failed to connect database", zap.Error(err))
-		rkcommon.ShutdownWithError(fmt.Errorf("failed to open database at %s:%s@%s(%s)/%s",
-			entry.User, "****", entry.protocol, entry.addr, entry.database))
-	}
-
-	// Auth migrate
-	if err := entry.GormDB.AutoMigrate(entry.GormAutoMigrate...); err != nil {
-		entry.Logger.Printf("failed to auth migrate", zap.Error(err))
-		rkcommon.ShutdownWithError(fmt.Errorf("failed to auth migrate"))
-	}
-
-	// Health check
-	if entry.enableHealthCheck {
-		go func() {
-			entry.healthCheck(context.TODO())
-		}()
+		entry.Logger.Error("failed to connect to database", zap.Error(err))
+		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s(%s)",
+			entry.User, "****", entry.Protocol, entry.Addr))
 	}
 }
 
 // Interrupt MySqlEntry
 func (entry *MySqlEntry) Interrupt(ctx context.Context) {
-	entry.Logger.Println("Interrupt mysql entry")
-
-	if entry.enableHealthCheck {
-		entry.healthCheckSignal <- true
-	}
+	entry.Logger.Info("Interrupt mysql entry",
+		zap.String("entryName", entry.EntryName),
+		zap.String("mySqlUser", entry.User),
+		zap.String("mySqlAddr", entry.Addr))
 }
 
 // GetName returns entry name
@@ -381,123 +376,68 @@ func (entry *MySqlEntry) String() string {
 	return string(bytes)
 }
 
-// Connect to to remote/local provider
-func (entry *MySqlEntry) connect() error {
-	// init gorm.DB
-	sqlParams := ""
-	for i := range entry.params {
-		sqlParams += entry.params[i] + "&"
-	}
-	sqlParams = strings.TrimSuffix(sqlParams, "&")
-
-	dsn := fmt.Sprintf("%s:%s@%s(%s)/%s?%s",
-		entry.User, entry.pass, entry.protocol, entry.addr, entry.database, sqlParams)
-
-	var db *gorm.DB
-	var err error
-
-	if entry.enableMockDb {
-		// Mock db enabled for unit test
-		var sqlDb *sql.DB
-		sqlDb, entry.SqlMock, _ = sqlmock.New()
-		db, err = gorm.Open(mysql.New(mysql.Config{
-			Conn:                      sqlDb,
-			SkipInitializeWithVersion: true,
-		}), &gorm.Config{
-			NowFunc: entry.nowFunc,
-		})
-	} else {
-		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	}
-
-	if err != nil {
-		return err
-	}
-
-	entry.GormDB = db
-	return nil
-}
-
 // IsHealthy checks healthy status remote provider
 func (entry *MySqlEntry) IsHealthy() bool {
-	if entry.enableMockDb {
-		return true
-	}
-
-	if d, err := entry.GormDB.DB(); err != nil {
-		return false
-	} else {
-		if err := d.Ping(); err != nil {
+	for _, gormDb := range entry.GormDbMap {
+		if db, err := gormDb.DB(); err != nil {
 			return false
+		} else {
+			if err := db.Ping(); err != nil {
+				return false
+			}
 		}
 	}
 
 	return true
 }
 
-// HealthCheck runs periodic jobs which pings DB
-func (entry *MySqlEntry) healthCheck(ctx context.Context) {
-	for {
-		select {
-		case <-entry.healthCheckSignal:
-			entry.Logger.Println("health check interrupted")
-			return
-		case <-entry.healthCheckTicker.C:
-			if healthy := entry.IsHealthy(); !healthy {
-				entry.Logger.Println("health check failed!")
-			}
-		}
-	}
-}
-
-// AddAutoMigrate add gorm models needs to be auto migrated
-func (entry *MySqlEntry) AddAutoMigrate(inters ...interface{}) {
-	entry.GormAutoMigrate = append(entry.GormAutoMigrate, inters...)
+func (entry *MySqlEntry) GetDB(name string) *gorm.DB {
+	return entry.GormDbMap[name]
 }
 
 // Create database if missing
-func (entry *MySqlEntry) createDbIfMissing() error {
-	// init gorm.DB
-	sqlParams := ""
-	for i := range entry.params {
-		sqlParams += entry.params[i] + "&"
-	}
-	sqlParams = strings.TrimSuffix(sqlParams, "&")
+func (entry *MySqlEntry) connect() error {
+	for _, innerDb := range entry.innerDbList {
+		var db *gorm.DB
+		var err error
 
-	dsn := fmt.Sprintf("%s:%s@%s(%s)/?%s",
-		entry.User, entry.pass, entry.protocol, entry.addr, sqlParams)
+		sqlParams := strings.Join(innerDb.params, "&")
 
-	var db *gorm.DB
-	var err error
+		// 1: create db if missing
+		if !innerDb.dryRun && innerDb.autoCreate {
+			dsn := fmt.Sprintf("%s:%s@%s(%s)/?%s",
+				entry.User, entry.pass, entry.Protocol, entry.Addr, sqlParams)
 
-	if entry.enableMockDb {
-		// Mock db enabled for unit test
-		var sqlDb *sql.DB
-		sqlDb, entry.SqlMock, _ = sqlmock.New()
-		db, err = gorm.Open(mysql.New(mysql.Config{
-			Conn:                      sqlDb,
-			SkipInitializeWithVersion: true,
-		}), entry.GormConfig)
+			db, err = gorm.Open(mysql.Open(dsn), entry.GormConfigMap[innerDb.name])
 
-		// For unit test
-		entry.SqlMock.ExpectExec(
-			fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4;", entry.database)).
-			WillReturnResult(driver.RowsAffected(0))
-	} else {
-		db, err = gorm.Open(mysql.Open(dsn), entry.GormConfig)
-	}
+			// failed to connect to database
+			if err != nil {
+				return err
+			}
 
-	if err != nil {
-		return err
-	}
+			createSQL := fmt.Sprintf(
+				"CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4;",
+				innerDb.name,
+			)
 
-	createSQL := fmt.Sprintf(
-		"CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4;",
-		entry.database,
-	)
+			db = db.Exec(createSQL)
 
-	if err := db.Exec(createSQL).Error; err != nil {
-		return err
+			if db.Error != nil {
+				return err
+			}
+		}
+
+		dsn := fmt.Sprintf("%s:%s@%s(%s)/%s?%s",
+			entry.User, entry.pass, entry.Protocol, entry.Addr, innerDb.name, sqlParams)
+
+		db, err = gorm.Open(mysql.Open(dsn), entry.GormConfigMap[innerDb.name])
+
+		// failed to connect to database
+		if err != nil {
+			return err
+		}
+
+		entry.GormDbMap[innerDb.name] = db
 	}
 
 	return nil
@@ -508,11 +448,12 @@ func toAbsPath(p ...string) []string {
 	res := make([]string, 0)
 
 	for i := range p {
-		if path.IsAbs(p[i]) {
-			res = append(res, p[i])
+		newPath := p[i]
+		if !path.IsAbs(p[i]) {
+			wd, _ := os.Getwd()
+			newPath = path.Join(wd, p[i])
 		}
-		wd, _ := os.Getwd()
-		res = append(res, path.Join(wd, p[i]))
+		res = append(res, newPath)
 	}
 
 	return res

@@ -4,15 +4,22 @@ gin:
     port: 8080
     enabled: true
 mySql:
-  - name: user-db
-    enabled: true
-    enableHealthCheck: true
-    locale: "*::*::*::*"
-    user: root
-    pass: pass
-    addr: "localhost:3306"
-    database: user
-    params:
-      - "charset=utf8mb4"
-      - "parseTime=True"
-      - "loc=Local"
+  - name: user-db                     # Required
+    enabled: true                     # Required
+    locale: "*::*::*::*"              # Required
+    addr: "localhost:3306"            # Optional, default: localhost:3306
+    user: root                        # Optional, default: root
+    pass: pass                        # Optional, default: pass
+    protocol: tcp                     # Optional, default: tcp
+    database:
+      - name: user                    # Required
+        autoCreate: true              # Optional, default: false
+#        dryRun: false                # Optional, default: false
+#        params:                      # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
+#          - "charset=utf8mb4"
+#          - "parseTime=True"
+#          - "loc=Local"
+#    logger:
+#      level: warn                    # Optional, default: warn
+#      encoding: json                 # Optional, default: console
+#      outputPaths: [ "mysql/log" ]   # Optional, default: []

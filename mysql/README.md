@@ -1,6 +1,6 @@
 # rk-db/mysql
 
-Init [gorm](https://github.com/go-gorm/gorm) or [go-sqlmock](github.com/DATA-DOG/go-sqlmock) from YAML config.
+Init [gorm](https://github.com/go-gorm/gorm) from YAML config.
 
 This belongs to [rk-boot](https://github.com/rookie-ninja/rk-boot) family. We suggest use this lib from [rk-boot](https://github.com/rookie-ninja/rk-boot).
 
@@ -8,31 +8,30 @@ This belongs to [rk-boot](https://github.com/rookie-ninja/rk-boot) family. We su
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [rk-db/mysql](#rk-dbmysql)
-  - [Supported bootstrap](#supported-bootstrap)
-  - [Supported Instances](#supported-instances)
-  - [Installation](#installation)
-  - [Quick Start](#quick-start)
-    - [0.Import rk-boot/gin as web framework to use](#0import-rk-bootgin-as-web-framework-to-use)
-    - [1.Create boot.yaml](#1create-bootyaml)
-    - [2.Create main.go](#2create-maingo)
-    - [3.Start server](#3start-server)
-    - [4.Validation](#4validation)
-      - [4.1 Create user](#41-create-user)
-      - [4.1 Update user](#41-update-user)
-      - [4.1 List users](#41-list-users)
-      - [4.1 Get user](#41-get-user)
-      - [4.1 Delete user](#41-delete-user)
-  - [YAML Options](#yaml-options)
-    - [Usage of locale](#usage-of-locale)
+- [Supported bootstrap](#supported-bootstrap)
+- [Supported Instances](#supported-instances)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [0.Import rk-boot/gin as web framework to use](#0import-rk-bootgin-as-web-framework-to-use)
+  - [1.Create boot.yaml](#1create-bootyaml)
+  - [2.Create main.go](#2create-maingo)
+  - [3.Start server](#3start-server)
+  - [4.Validation](#4validation)
+    - [4.1 Create user](#41-create-user)
+    - [4.1 Update user](#41-update-user)
+    - [4.1 List users](#41-list-users)
+    - [4.1 Get user](#41-get-user)
+    - [4.1 Delete user](#41-delete-user)
+- [YAML Options](#yaml-options)
+  - [Usage of locale](#usage-of-locale)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Supported bootstrap
 | Bootstrap | Description |
 | --- | --- |
-| YAML based | Start [gorm](https://github.com/go-gorm/gorm) or [go-sqlmock](github.com/DATA-DOG/go-sqlmock) from YAML |
-| Code based | Start [gorm](https://github.com/go-gorm/gorm) or [go-sqlmock](github.com/DATA-DOG/go-sqlmock) from code |
+| YAML based | Start [gorm](https://github.com/go-gorm/gorm) from YAML |
+| Code based | Start [gorm](https://github.com/go-gorm/gorm) from code |
 
 ## Supported Instances
 All instances could be configured via YAML or Code.
@@ -42,9 +41,7 @@ All instances could be configured via YAML or Code.
 | Instance | Description |
 | --- | --- |
 | gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
-| sqlmock.Sqlmock | Conpatible with original [go-sqlmock](github.com/DATA-DOG/go-sqlmock) |
 | Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| HealthCheck | Periodic DB health check every 5 seconds |
 | AutoCreation | Automatically create DB and table if missing in MySQL |
 
 ## Installation
@@ -80,18 +77,24 @@ gin:
     port: 8080
     enabled: true
 mySql:
-  - name: user-db
-    enabled: true
-    enableHealthCheck: true
-    locale: "*::*::*::*"
-    user: root
-    pass: pass
-    addr: "localhost:3306"
-    database: user
-    params:
-      - "charset=utf8mb4"
-      - "parseTime=True"
-      - "loc=Local"
+  - name: user-db                     # Required
+    enabled: true                     # Required
+    locale: "*::*::*::*"              # Required
+    addr: "localhost:3306"            # Optional, default: localhost:3306
+    user: root                        # Optional, default: root
+    pass: pass                        # Optional, default: pass
+    database:
+      - name: user                    # Required
+        autoCreate: true              # Optional, default: false
+#        dryRun: false                # Optional, default: false
+#        params:                      # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
+#          - "charset=utf8mb4"
+#          - "parseTime=True"
+#          - "loc=Local"
+#    logger:
+#      level: warn                    # Optional, default: warn
+#      encoding: json                 # Optional, default: console
+#      outputPaths: [ "mysql/log" ]   # Optional, default: []
 ```
 
 ### 2.Create main.go
@@ -102,6 +105,10 @@ In the main() function, we implement two things.
 - Register APIs into Gin router.
 
 ```go
+// Copyright (c) 2021 rookie-ninja
+//
+// Use of this source code is governed by an Apache-style
+// license that can be found in the LICENSE file.
 package main
 
 import (
@@ -116,12 +123,19 @@ import (
 	"time"
 )
 
+var userDb *gorm.DB
+
 func main() {
 	boot := rkboot.NewBoot(rkboot.WithBootConfigPath("example/boot.yaml"))
 
-	// Add auto migrate
+	boot.Bootstrap(context.TODO())
+
+	// Auto migrate database and init global userDb variable
 	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
-	mysqlEntry.AddAutoMigrate(&User{})
+	userDb = mysqlEntry.GetDB("user")
+	if !userDb.DryRun {
+		userDb.AutoMigrate(&User{})
+	}
 
 	// Register APIs
 	ginEntry := rkbootgin.GetGinEntry("user-service")
@@ -130,8 +144,6 @@ func main() {
 	ginEntry.Router.PUT("/v1/user", CreateUser)
 	ginEntry.Router.POST("/v1/user/:id", UpdateUser)
 	ginEntry.Router.DELETE("/v1/user/:id", DeleteUser)
-
-	boot.Bootstrap(context.TODO())
 
 	boot.WaitForShutdownSig(context.TODO())
 }
@@ -154,7 +166,7 @@ type User struct {
 
 func ListUsers(ctx *gin.Context) {
 	userList := make([]*User, 0)
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Find(&userList)
+	res := userDb.Find(&userList)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -166,7 +178,7 @@ func ListUsers(ctx *gin.Context) {
 func GetUser(ctx *gin.Context) {
 	uid := ctx.Param("id")
 	user := &User{}
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Where("id = ?", uid).Find(user)
+	res := userDb.Where("id = ?", uid).Find(user)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -180,7 +192,7 @@ func CreateUser(ctx *gin.Context) {
 		Name: ctx.Query("name"),
 	}
 
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Create(user)
+	res := userDb.Create(user)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -195,7 +207,7 @@ func UpdateUser(ctx *gin.Context) {
 		Name: ctx.Query("name"),
 	}
 
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Where("id = ?", uid).Updates(user)
+	res := userDb.Where("id = ?", uid).Updates(user)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -203,14 +215,14 @@ func UpdateUser(ctx *gin.Context) {
 	}
 
 	// get user
-	rkmysql.GetMySqlEntry("user-db").GormDB.Where("id = ?", uid).Find(user)
+	userDb.Where("id = ?", uid).Find(user)
 
 	ctx.JSON(http.StatusOK, user)
 }
 
 func DeleteUser(ctx *gin.Context) {
 	uid, _ := strconv.Atoi(ctx.Param("id"))
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Delete(&User{
+	res := userDb.Delete(&User{
 		Id: uid,
 	})
 
@@ -227,13 +239,13 @@ func DeleteUser(ctx *gin.Context) {
 ```
 $ go run main.go
 
-2022-01-01T04:03:49.377+0800    INFO    boot/gin_entry.go:913   Bootstrap ginEntry      {"eventId": "223fd0e6-dad4-4ff3-9654-0ef90760192e", "entryName": "user-service"}
+2022-01-05T22:06:07.755+0800    INFO    boot/gin_entry.go:913   Bootstrap ginEntry      {"eventId": "5ed1c920-5036-4ba2-9f65-f88856ad2d6d", "entryName": "user-service"}
 ------------------------------------------------------------------------
-endTime=2022-01-01T04:03:49.377377+08:00
-startTime=2022-01-01T04:03:49.377287+08:00
-elapsedNano=89347
+endTime=2022-01-05T22:06:07.755617+08:00
+startTime=2022-01-05T22:06:07.755521+08:00
+elapsedNano=96442
 timezone=CST
-ids={"eventId":"223fd0e6-dad4-4ff3-9654-0ef90760192e"}
+ids={"eventId":"5ed1c920-5036-4ba2-9f65-f88856ad2d6d"}
 app={"appName":"rk","appVersion":"","entryName":"user-service","entryType":"GinEntry"}
 env={"arch":"amd64","az":"*","domain":"*","hostname":"lark.local","localIP":"10.8.0.2","os":"darwin","realm":"*","region":"*"}
 payloads={"ginPort":8080}
@@ -246,7 +258,7 @@ operation=Bootstrap
 resCode=OK
 eventStatus=Ended
 EOE
-2022-01-01T04:03:49.377+0800    INFO    zapgrpc/zapgrpc.go:99   Bootstrap mysql entry
+2022-01-05T22:06:07.755+0800    INFO    mysql/boot.go:328       Bootstrap mysql entry
 ```
 
 ### 4.Validation
@@ -300,15 +312,17 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | mysql.enabled | Required | Enable entry or not | bool | false |
 | mysql.locale | Required | See locale description bellow | string | "" |
 | mysql.description | Optional | Description of echo entry. | string | "" |
-| mysql.enableMockDb | Optional | Create [go-sqlmock](github.com/DATA-DOG/go-sqlmock) instead of [gorm](https://github.com/go-gorm/gorm) for unit test, see [detail](https://github.com/DATA-DOG/go-sqlmock#tests-with-sqlmock) | bool | false |
-| mysql.enableHealthCHeck | Optional | Periodic DB health check every 5 seconds, error will be logged | bool | false |
 | mysql.user | Optional | MySQL username | string | root |
 | mysql.pass | Optional | MySQL password | string | pass |
 | mysql.protocol | Optional | Connection protocol to MySQL | string | tcp |
 | mysql.addr | Optional | MySQL remote address | string | localhost:3306 |
-| mysql.params | Optional | Parameters while conneting to MySQL | []string | [] |
-| mysql.loggerEncoding | Optional | Log encoding type, json & console are available options | string | console |
-| mysql.loggerOutputPaths | Optional | Output paths of logger | []string | [stdout] |
+| mysql.database.name | Required | Name of database | string | "" |
+| mysql.database.autoCreate | Optional | Create DB if missing | bool | false |
+| mysql.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
+| mysql.database.params | Optional | Connection params | []string | ["charset=utf8mb4","parseTime=True","loc=Local"] |
+| mysql.logger.encoding | Optional | Log encoding type, json & console are available options | string | console |
+| mysql.logger.outputPaths | Optional | Output paths of logger | []string | [stdout] |
+| mysql.logger.level | Optional | Logger level, options: silent, error, warn, info | string | warn |
 
 ### Usage of locale
 
@@ -357,20 +371,3 @@ DB:
     locale: "*::*::*::prod"
     addr: "176.0.0.1:6379"
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

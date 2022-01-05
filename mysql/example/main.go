@@ -1,3 +1,7 @@
+// Copyright (c) 2021 rookie-ninja
+//
+// Use of this source code is governed by an Apache-style
+// license that can be found in the LICENSE file.
 package main
 
 import (
@@ -12,12 +16,19 @@ import (
 	"time"
 )
 
+var userDb *gorm.DB
+
 func main() {
 	boot := rkboot.NewBoot(rkboot.WithBootConfigPath("example/boot.yaml"))
 
-	// Add auto migrate
+	boot.Bootstrap(context.TODO())
+
+	// Auto migrate database and init global userDb variable
 	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
-	mysqlEntry.AddAutoMigrate(&User{})
+	userDb = mysqlEntry.GetDB("user")
+	if !userDb.DryRun {
+		userDb.AutoMigrate(&User{})
+	}
 
 	// Register APIs
 	ginEntry := rkbootgin.GetGinEntry("user-service")
@@ -26,8 +37,6 @@ func main() {
 	ginEntry.Router.PUT("/v1/user", CreateUser)
 	ginEntry.Router.POST("/v1/user/:id", UpdateUser)
 	ginEntry.Router.DELETE("/v1/user/:id", DeleteUser)
-
-	boot.Bootstrap(context.TODO())
 
 	boot.WaitForShutdownSig(context.TODO())
 }
@@ -50,7 +59,7 @@ type User struct {
 
 func ListUsers(ctx *gin.Context) {
 	userList := make([]*User, 0)
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Find(&userList)
+	res := userDb.Find(&userList)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -62,7 +71,7 @@ func ListUsers(ctx *gin.Context) {
 func GetUser(ctx *gin.Context) {
 	uid := ctx.Param("id")
 	user := &User{}
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Where("id = ?", uid).Find(user)
+	res := userDb.Where("id = ?", uid).Find(user)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -76,7 +85,7 @@ func CreateUser(ctx *gin.Context) {
 		Name: ctx.Query("name"),
 	}
 
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Create(user)
+	res := userDb.Create(user)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -91,7 +100,7 @@ func UpdateUser(ctx *gin.Context) {
 		Name: ctx.Query("name"),
 	}
 
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Where("id = ?", uid).Updates(user)
+	res := userDb.Where("id = ?", uid).Updates(user)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
@@ -99,14 +108,14 @@ func UpdateUser(ctx *gin.Context) {
 	}
 
 	// get user
-	rkmysql.GetMySqlEntry("user-db").GormDB.Where("id = ?", uid).Find(user)
+	userDb.Where("id = ?", uid).Find(user)
 
 	ctx.JSON(http.StatusOK, user)
 }
 
 func DeleteUser(ctx *gin.Context) {
 	uid, _ := strconv.Atoi(ctx.Param("id"))
-	res := rkmysql.GetMySqlEntry("user-db").GormDB.Delete(&User{
+	res := userDb.Delete(&User{
 		Id: uid,
 	})
 
