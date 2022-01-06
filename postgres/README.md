@@ -42,7 +42,7 @@ All instances could be configured via YAML or Code.
 | --- | --- |
 | gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
 | Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| AutoCreation | Automatically create DB and table if missing in PostgreSQL |
+| AutoCreation | Automatically create DB if missing in PostgreSQL |
 
 ## Installation
 `go get github.com/rookie-ninja/rk-db/postgres`

@@ -2,7 +2,7 @@
 //
 // Use of this source code is governed by an Apache-style
 // license that can be found in the LICENSE file.
-package rkpostgres
+package rksqlite
 
 import (
 	"context"
@@ -16,17 +16,14 @@ import (
 	"testing"
 )
 
-func TestRegisterPostgresEntry(t *testing.T) {
+func TestRegisterSqliteEntry(t *testing.T) {
 	// without options
-	entry := RegisterPostgresEntry()
+	entry := RegisterSqliteEntry()
 
 	assert.NotEmpty(t, entry.GetName())
 	assert.NotEmpty(t, entry.GetType())
 	assert.NotEmpty(t, entry.GetDescription())
 	assert.NotEmpty(t, entry.String())
-	assert.Equal(t, "postgres", entry.User)
-	assert.Equal(t, "pass", entry.pass)
-	assert.Equal(t, "localhost:5432", entry.Addr)
 	assert.Empty(t, entry.GormDbMap)
 	assert.Empty(t, entry.GormConfigMap)
 	assert.Equal(t, EncodingConsole, entry.loggerEncoding)
@@ -38,13 +35,10 @@ func TestRegisterPostgresEntry(t *testing.T) {
 	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
 
 	// with options
-	entry = RegisterPostgresEntry(
+	entry = RegisterSqliteEntry(
 		WithName("ut-entry"),
 		WithDescription("ut-entry"),
-		WithUser("ut-user"),
-		WithPass("ut-pass"),
-		WithAddr("ut-addr"),
-		WithDatabase("ut-database", true, false, false),
+		WithDatabase("ut-database", "", true, true),
 		WithLoggerEncoding(EncodingJson),
 		WithLoggerOutputPaths("ut-output"),
 		WithLoggerLevel(LoggerLevelInfo))
@@ -53,9 +47,6 @@ func TestRegisterPostgresEntry(t *testing.T) {
 	assert.NotEmpty(t, entry.GetType())
 	assert.Equal(t, "ut-entry", entry.GetDescription())
 	assert.NotEmpty(t, entry.String())
-	assert.Equal(t, "ut-user", entry.User)
-	assert.Equal(t, "ut-pass", entry.pass)
-	assert.Equal(t, "ut-addr", entry.Addr)
 	assert.Empty(t, entry.GormDbMap)
 	assert.NotEmpty(t, entry.GormConfigMap)
 	assert.Equal(t, EncodingJson, entry.loggerEncoding)
@@ -67,9 +58,9 @@ func TestRegisterPostgresEntry(t *testing.T) {
 	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
 }
 
-func TestPostgresEntry_IsHealthy(t *testing.T) {
+func TestSqliteEntry_IsHealthy(t *testing.T) {
 	// test with dry run enabled
-	entry := RegisterPostgresEntry(
+	entry := RegisterSqliteEntry(
 		WithLoggerLevel(LoggerLevelInfo),
 		WithLoggerEncoding(EncodingConsole))
 	entry.Bootstrap(context.TODO())
@@ -114,55 +105,52 @@ func TestToAbsPath(t *testing.T) {
 	assert.True(t, strings.HasPrefix(res[0], "/"))
 }
 
-func TestGetPostgresEntry(t *testing.T) {
+func TestGetSqliteEntry(t *testing.T) {
 	// expect nil
-	assert.Nil(t, GetPostgresEntry("not-exist"))
+	assert.Nil(t, GetSqliteEntry("not-exist"))
 
 	// with invalid entry
-	assert.Nil(t, GetPostgresEntry(rkentry.GlobalAppCtx.GetAppInfoEntry().GetName()))
+	assert.Nil(t, GetSqliteEntry(rkentry.GlobalAppCtx.GetAppInfoEntry().GetName()))
 
-	entry := RegisterPostgresEntry()
+	entry := RegisterSqliteEntry()
 	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
 	// happy case
-	assert.Equal(t, entry, GetPostgresEntry(entry.GetName()))
+	assert.Equal(t, entry, GetSqliteEntry(entry.GetName()))
 }
 
-func TestRegisterPostgresEntriesWithConfig(t *testing.T) {
+func TestRegisterSqliteEntriesWithConfig(t *testing.T) {
 	bootConfigStr := `
-postgres:
-  - name: user-db
-    enabled: true
-    locale: "*::*::*::*"
-    addr: "localhost:5432"
-    user: postgres
-    pass: pass
-    logger:
-      level: warn
-      encoding: json
-      outputPaths: [ "pg/log" ]
+sqlite:
+  - name: user-db                     # Required
+    enabled: true                     # Required
+    locale: "*::*::*::*"              # Required
     database:
-      - name: user
-        autoCreate: true
-        dryRun: false
-        preferSimpleProtocol: false
-        params: []
+      - name: user                    # Required
+#        inMemory: true               # Optional, default: false
+#        dbDir: ""                    # Optional, default: "", directory where db file created or imported, can be absolute or relative path
+#        dryRun: true                 # Optional, default: false
+#        params: []                   # Optional, default: ["cache=shared"]
+#    logger:
+#      level: warn                    # Optional, default: warn
+#      encoding: json                 # Optional, default: console
+#      outputPaths: [ "sqlite/log" ]  # Optional, default: []
 `
 
 	tempDir := path.Join(t.TempDir(), "boot.yaml")
 	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(bootConfigStr), os.ModePerm))
 
-	entries := RegisterPostgresEntriesWithConfig(tempDir)
+	entries := RegisterSqliteEntriesWithConfig(tempDir)
 
 	assert.NotEmpty(t, entries)
 
 	rkentry.GlobalAppCtx.RemoveEntry("user-db")
 }
 
-func TestPostgresEntry_Bootstrap(t *testing.T) {
+func TestSqliteEntry_Bootstrap(t *testing.T) {
 	defer assertNotPanic(t)
 
-	entry := RegisterPostgresEntry(
-		WithDatabase("ut-database", false, true, false))
+	entry := RegisterSqliteEntry(
+		WithDatabase("ut-database", "", false, true))
 	entry.Bootstrap(context.TODO())
 
 	assert.NotNil(t, entry.GetDB("ut-database"))

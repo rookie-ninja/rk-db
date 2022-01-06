@@ -1,4 +1,4 @@
-# rk-db/mysql
+# rk-db/sqlite
 
 Init [gorm](https://github.com/go-gorm/gorm) from YAML config.
 
@@ -42,13 +42,13 @@ All instances could be configured via YAML or Code.
 | --- | --- |
 | gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
 | Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| AutoCreation | Automatically create DB if missing in MySQL |
+| AutoCreation | Automatically create DB file locally |
 
 ## Installation
-`go get github.com/rookie-ninja/rk-db/mysql`
+`go get github.com/rookie-ninja/rk-db/sqlite`
 
 ## Quick Start
-In the bellow example, we will run MySQL locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
+In the bellow example, we will run SQLite locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
 
 - GET /v1/user, List users
 - GET /v1/user/:id, Get user
@@ -68,7 +68,7 @@ go get github.com/rookie-ninja/rk-boot/gin
 [boot.yaml](example/boot.yaml)
 
 - Create web server with Gin framework at port 8080
-- Create MySQL entry which connects MySQL at localhost:3306
+- Create Sqlite entry which connects Sqlite at file path or in memory
 
 ```yaml
 ---
@@ -76,25 +76,20 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
-mySql:
+sqlite:
   - name: user-db                     # Required
     enabled: true                     # Required
     locale: "*::*::*::*"              # Required
-    addr: "localhost:3306"            # Optional, default: localhost:3306
-    user: root                        # Optional, default: root
-    pass: pass                        # Optional, default: pass
     database:
       - name: user                    # Required
-        autoCreate: true              # Optional, default: false
-#        dryRun: false                # Optional, default: false
-#        params:                      # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
-#          - "charset=utf8mb4"
-#          - "parseTime=True"
-#          - "loc=Local"
+#        inMemory: true               # Optional, default: false
+#        dbDir: ""                    # Optional, default: "", directory where db file created or imported, can be absolute or relative path
+#        dryRun: true                 # Optional, default: false
+#        params: []                   # Optional, default: ["cache=shared"]
 #    logger:
 #      level: warn                    # Optional, default: warn
 #      encoding: json                 # Optional, default: console
-#      outputPaths: [ "mysql/log" ]   # Optional, default: []
+#      outputPaths: [ "sqlite/log" ]  # Optional, default: []
 ```
 
 ### 2.Create main.go
@@ -116,7 +111,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot"
 	"github.com/rookie-ninja/rk-boot/gin"
-	"github.com/rookie-ninja/rk-db/mysql"
+	"github.com/rookie-ninja/rk-db/sqlite"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -131,8 +126,8 @@ func main() {
 	boot.Bootstrap(context.TODO())
 
 	// Auto migrate database and init global userDb variable
-	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
-	userDb = mysqlEntry.GetDB("user")
+	sqliteEntry := rksqlite.GetSqliteEntry("user-db")
+	userDb = sqliteEntry.GetDB("user")
 	if !userDb.DryRun {
 		userDb.AutoMigrate(&User{})
 	}
@@ -214,6 +209,11 @@ func UpdateUser(ctx *gin.Context) {
 		return
 	}
 
+	if res.RowsAffected < 1 {
+		ctx.JSON(http.StatusNotFound, "user not found")
+		return
+	}
+
 	// get user
 	userDb.Where("id = ?", uid).Find(user)
 
@@ -230,21 +230,29 @@ func DeleteUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
 		return
 	}
+
+	if res.RowsAffected < 1 {
+		ctx.JSON(http.StatusNotFound, "user not found")
+		return
+	}
+
 	ctx.String(http.StatusOK, "success")
 }
 ```
 
 ### 3.Start server
+user.db file would be created automatically. The file name will be created based on <database.name>.db
 
 ```
 $ go run main.go
 
+2022-01-06T20:53:24.023+0800    INFO    boot/gin_entry.go:913   Bootstrap ginEntry      {"eventId": "505acbfa-7f0b-425b-be53-c9b80036a3f7", "entryName": "user-service"}
 ------------------------------------------------------------------------
-endTime=2022-01-06T19:26:13.071779+08:00
-startTime=2022-01-06T19:26:13.071691+08:00
-elapsedNano=88114
+endTime=2022-01-06T20:53:24.023552+08:00
+startTime=2022-01-06T20:53:24.023405+08:00
+elapsedNano=147732
 timezone=CST
-ids={"eventId":"8d338358-8028-4571-a458-76ae229a362a"}
+ids={"eventId":"505acbfa-7f0b-425b-be53-c9b80036a3f7"}
 app={"appName":"rk","appVersion":"","entryName":"user-service","entryType":"GinEntry"}
 env={"arch":"amd64","az":"*","domain":"*","hostname":"lark.local","localIP":"10.8.0.2","os":"darwin","realm":"*","region":"*"}
 payloads={"ginPort":8080}
@@ -257,7 +265,7 @@ operation=Bootstrap
 resCode=OK
 eventStatus=Ended
 EOE
-2022-01-06T19:26:13.071+0800    INFO    Bootstrap mysql entry   {"entryName": "user-db", "mySqlUser": "root", "mySqlAddr": "localhost:3306"}
+2022-01-06T20:53:24.023+0800    INFO    Bootstrap SQLite entry  {"entryName": "user-db"}
 ```
 
 ### 4.Validation
@@ -266,15 +274,15 @@ Create a user with name of rk-dev.
 
 ```shell script
 $ curl -X PUT "localhost:8080/v1/user?name=rk-dev"
-{"id":2,"name":"rk-dev"}
+{"id":1,"name":"rk-dev"}
 ```
 
 #### 4.1 Update user
 Update user name to rk-dev-updated.
 
 ```shell script
-$ curl -X POST "localhost:8080/v1/user/2?name=rk-dev-updated"
-{"id":2,"name":"rk-dev-updated"}
+$ curl -X POST "localhost:8080/v1/user/1?name=rk-dev-updated"
+{"id":1,"name":"rk-dev-updated"}
 ```
 
 #### 4.1 List users
@@ -282,15 +290,15 @@ List users.
 
 ```shell script
 $ curl -X GET localhost:8080/v1/user
-[{"id":2,"name":"rk-dev-updated"}]
+[{"id":1,"name":"rk-dev-updated"}]
 ```
 
 #### 4.1 Get user
-Get user with id=2.
+Get user with id=1.
 
 ```shell script
-$ curl -X GET localhost:8080/v1/user/2
-{"id":2,"name":"rk-dev-updated"}
+$ curl -X GET localhost:8080/v1/user/1
+{"id":1,"name":"rk-dev-updated"}
 ```
 
 #### 4.1 Delete user
@@ -300,28 +308,25 @@ $ curl -X DELETE localhost:8080/v1/user/2
 success
 ```
 
-![image](docs/img/mysql.png)
+![image](docs/img/sqlite.png)
 
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
 | name | Required | description | type | default value |
 | ------ | ------ | ------ | ------ | ------ |
-| mysql.name | Required | The name of entry | string | MySql |
-| mysql.enabled | Required | Enable entry or not | bool | false |
-| mysql.locale | Required | See locale description bellow | string | "" |
-| mysql.description | Optional | Description of echo entry. | string | "" |
-| mysql.user | Optional | MySQL username | string | root |
-| mysql.pass | Optional | MySQL password | string | pass |
-| mysql.protocol | Optional | Connection protocol to MySQL | string | tcp |
-| mysql.addr | Optional | MySQL remote address | string | localhost:3306 |
-| mysql.database.name | Required | Name of database | string | "" |
-| mysql.database.autoCreate | Optional | Create DB if missing | bool | false |
-| mysql.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
-| mysql.database.params | Optional | Connection params | []string | ["charset=utf8mb4","parseTime=True","loc=Local"] |
-| mysql.logger.encoding | Optional | Log encoding type, json & console are available options | string | console |
-| mysql.logger.outputPaths | Optional | Output paths of logger | []string | [stdout] |
-| mysql.logger.level | Optional | Logger level, options: silent, error, warn, info | string | warn |
+| sqlite.name | Required | The name of entry | string | SQLite |
+| sqlite.enabled | Required | Enable entry or not | bool | false |
+| sqlite.locale | Required | See locale description bellow | string | "" |
+| sqlite.description | Optional | Description of echo entry. | string | "" |
+| sqlite.database.name | Required | Name of database | string | "" |
+| sqlite.database.inMemory | Optional | SQLite in memory | bool | false |
+| sqlite.database.dbDir | Optional | Specify *.db file directory | string | "", current working directory if empty |
+| sqlite.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
+| sqlite.database.params | Optional | Connection params | []string | ["cache=shared"] |
+| sqlite.logger.encoding | Optional | Log encoding type, json & console are available options | string | console |
+| sqlite.logger.outputPaths | Optional | Output paths of logger | []string | [stdout] |
+| sqlite.logger.level | Optional | Logger level, options: silent, error, warn, info | string | warn |
 
 ### Usage of locale
 
