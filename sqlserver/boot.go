@@ -268,8 +268,6 @@ func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 			zapLoggerConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
 		}
 
-		fmt.Println(zapLoggerConfig.OutputPaths)
-
 		if lumberjackConfig == nil {
 			lumberjackConfig = rklogger.NewLumberjackConfigDefault()
 		}
@@ -389,10 +387,10 @@ func (entry *SqlServerEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
+			entry.Logger.Info(fmt.Sprintf("creating database %s if not exists", innerDb.name))
+
 			dsn := fmt.Sprintf("sqlserver://%s:%s@%s",
 				entry.User, entry.pass, entry.Addr)
-
-			fmt.Println(dsn)
 
 			db, err = gorm.Open(sqlserver.Open(dsn), entry.GormConfigMap[innerDb.name])
 
@@ -402,15 +400,17 @@ func (entry *SqlServerEntry) connect() error {
 			}
 
 			createSQL := fmt.Sprintf(createDbSql, innerDb.name, innerDb.name)
-			fmt.Println(createSQL)
 
 			db = db.Exec(createSQL)
 
 			if db.Error != nil {
 				return db.Error
 			}
+
+			entry.Logger.Info(fmt.Sprintf("creating successs or database %s exists", innerDb.name))
 		}
 
+		entry.Logger.Info(fmt.Sprintf("connecting to database %s", innerDb.name))
 		params := []string{fmt.Sprintf("database=%s", innerDb.name)}
 		params = append(params, innerDb.params...)
 
@@ -425,6 +425,7 @@ func (entry *SqlServerEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
+		entry.Logger.Info(fmt.Sprintf("connecting to database %s success", innerDb.name))
 	}
 
 	return nil

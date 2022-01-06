@@ -272,8 +272,6 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 			zapLoggerConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
 		}
 
-		fmt.Println(zapLoggerConfig.OutputPaths)
-
 		if lumberjackConfig == nil {
 			lumberjackConfig = rklogger.NewLumberjackConfigDefault()
 		}
@@ -412,6 +410,8 @@ func (entry *PostgresEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
+			entry.Logger.Info(fmt.Sprintf("creating database %s if not exists", innerDb.name))
+
 			// It is a little bit complex procedure here
 			// connect to database postgres and try to create DB
 			paramsForDefaultDb := make([]string, 0)
@@ -443,7 +443,11 @@ func (entry *PostgresEntry) connect() error {
 					return res.Error
 				}
 			}
+
+			entry.Logger.Info(fmt.Sprintf("creating successs or database %s exists", innerDb.name))
 		}
+
+		entry.Logger.Info(fmt.Sprintf("connecting to database %s", innerDb.name))
 
 		// 2: connect
 		params = append(params, fmt.Sprintf("dbname=%s", innerDb.name))
@@ -457,6 +461,7 @@ func (entry *PostgresEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
+		entry.Logger.Info(fmt.Sprintf("connecting to database %s success", innerDb.name))
 	}
 
 	return nil

@@ -282,8 +282,6 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 			zapLoggerConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
 		}
 
-		fmt.Println(zapLoggerConfig.OutputPaths)
-
 		if lumberjackConfig == nil {
 			lumberjackConfig = rklogger.NewLumberjackConfigDefault()
 		}
@@ -405,6 +403,8 @@ func (entry *MySqlEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
+			entry.Logger.Info(fmt.Sprintf("creating database %s if not exists", innerDb.name))
+
 			dsn := fmt.Sprintf("%s:%s@%s(%s)/?%s",
 				entry.User, entry.pass, entry.Protocol, entry.Addr, sqlParams)
 
@@ -423,10 +423,12 @@ func (entry *MySqlEntry) connect() error {
 			db = db.Exec(createSQL)
 
 			if db.Error != nil {
-				return err
+				return db.Error
 			}
+			entry.Logger.Info(fmt.Sprintf("creating successs or database %s exists", innerDb.name))
 		}
 
+		entry.Logger.Info(fmt.Sprintf("connecting to database %s", innerDb.name))
 		dsn := fmt.Sprintf("%s:%s@%s(%s)/%s?%s",
 			entry.User, entry.pass, entry.Protocol, entry.Addr, innerDb.name, sqlParams)
 
@@ -438,6 +440,7 @@ func (entry *MySqlEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
+		entry.Logger.Info(fmt.Sprintf("connecting to database %s success", innerDb.name))
 	}
 
 	return nil
