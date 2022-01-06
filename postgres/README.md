@@ -1,4 +1,4 @@
-# rk-db/mysql
+# rk-db/postgres
 
 Init [gorm](https://github.com/go-gorm/gorm) from YAML config.
 
@@ -42,13 +42,13 @@ All instances could be configured via YAML or Code.
 | --- | --- |
 | gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
 | Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| AutoCreation | Automatically create DB and table if missing in MySQL |
+| AutoCreation | Automatically create DB and table if missing in PostgreSQL |
 
 ## Installation
-`go get github.com/rookie-ninja/rk-db/mysql`
+`go get github.com/rookie-ninja/rk-db/postgres`
 
 ## Quick Start
-In the bellow example, we will run MySQL locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
+In the bellow example, we will run PostgreSQL locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
 
 - GET /v1/user, List users
 - GET /v1/user/:id, Get user
@@ -68,7 +68,7 @@ go get github.com/rookie-ninja/rk-boot/gin
 [boot.yaml](example/boot.yaml)
 
 - Create web server with Gin framework at port 8080
-- Create MySQL entry which connects MySQL at localhost:3306
+- Create PostgreSQL entry which connects PostgreSQL at localhost:5432
 
 ```yaml
 ---
@@ -76,25 +76,23 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
-mySql:
+postgres:
   - name: user-db                     # Required
     enabled: true                     # Required
     locale: "*::*::*::*"              # Required
-    addr: "localhost:3306"            # Optional, default: localhost:3306
-    user: root                        # Optional, default: root
+    addr: "localhost:5432"            # Optional, default: localhost:5432
+    user: postgres                    # Optional, default: postgres
     pass: pass                        # Optional, default: pass
     database:
       - name: user                    # Required
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
-#        params:                      # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
-#          - "charset=utf8mb4"
-#          - "parseTime=True"
-#          - "loc=Local"
+#        preferSimpleProtocol: false  # Optional, default: false
+#        params: []                   # Optional, default: ["sslmode=disable","TimeZone=Asia/Shanghai"]
 #    logger:
 #      level: warn                    # Optional, default: warn
 #      encoding: json                 # Optional, default: console
-#      outputPaths: [ "mysql/log" ]   # Optional, default: []
+#      outputPaths: [ "pg/log" ]      # Optional, default: []
 ```
 
 ### 2.Create main.go
@@ -116,7 +114,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot"
 	"github.com/rookie-ninja/rk-boot/gin"
-	"github.com/rookie-ninja/rk-db/mysql"
+	"github.com/rookie-ninja/rk-db/postgres"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -131,8 +129,8 @@ func main() {
 	boot.Bootstrap(context.TODO())
 
 	// Auto migrate database and init global userDb variable
-	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
-	userDb = mysqlEntry.GetDB("user")
+	pgEntry := rkpostgres.GetPostgresEntry("user-db")
+	userDb = pgEntry.GetDB("user")
 	if !userDb.DryRun {
 		userDb.AutoMigrate(&User{})
 	}
@@ -214,6 +212,11 @@ func UpdateUser(ctx *gin.Context) {
 		return
 	}
 
+	if res.RowsAffected < 1 {
+		ctx.JSON(http.StatusNotFound, "user not found")
+		return
+	}
+
 	// get user
 	userDb.Where("id = ?", uid).Find(user)
 
@@ -230,6 +233,12 @@ func DeleteUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
 		return
 	}
+
+	if res.RowsAffected < 1 {
+		ctx.JSON(http.StatusNotFound, "user not found")
+		return
+	}
+
 	ctx.String(http.StatusOK, "success")
 }
 ```
@@ -239,12 +248,13 @@ func DeleteUser(ctx *gin.Context) {
 ```
 $ go run main.go
 
+2022-01-05T22:06:07.755+0800    INFO    boot/gin_entry.go:913   Bootstrap ginEntry      {"eventId": "5ed1c920-5036-4ba2-9f65-f88856ad2d6d", "entryName": "user-service"}
 ------------------------------------------------------------------------
-endTime=2022-01-06T19:26:13.071779+08:00
-startTime=2022-01-06T19:26:13.071691+08:00
-elapsedNano=88114
+endTime=2022-01-05T22:06:07.755617+08:00
+startTime=2022-01-05T22:06:07.755521+08:00
+elapsedNano=96442
 timezone=CST
-ids={"eventId":"8d338358-8028-4571-a458-76ae229a362a"}
+ids={"eventId":"5ed1c920-5036-4ba2-9f65-f88856ad2d6d"}
 app={"appName":"rk","appVersion":"","entryName":"user-service","entryType":"GinEntry"}
 env={"arch":"amd64","az":"*","domain":"*","hostname":"lark.local","localIP":"10.8.0.2","os":"darwin","realm":"*","region":"*"}
 payloads={"ginPort":8080}
@@ -257,7 +267,7 @@ operation=Bootstrap
 resCode=OK
 eventStatus=Ended
 EOE
-2022-01-06T19:26:13.071+0800    INFO    Bootstrap mysql entry   {"entryName": "user-db", "mySqlUser": "root", "mySqlAddr": "localhost:3306"}
+2022-01-06T19:10:15.730+0800    INFO    Bootstrap postgres entry        {"entryName": "user-db", "postgresUser": "postgres", "postgresAddr": "localhost:5432"}
 ```
 
 ### 4.Validation
@@ -300,28 +310,28 @@ $ curl -X DELETE localhost:8080/v1/user/2
 success
 ```
 
-![image](docs/img/mysql.png)
+![image](docs/img/pg.png)
 
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
 | name | Required | description | type | default value |
 | ------ | ------ | ------ | ------ | ------ |
-| mysql.name | Required | The name of entry | string | MySql |
-| mysql.enabled | Required | Enable entry or not | bool | false |
-| mysql.locale | Required | See locale description bellow | string | "" |
-| mysql.description | Optional | Description of echo entry. | string | "" |
-| mysql.user | Optional | MySQL username | string | root |
-| mysql.pass | Optional | MySQL password | string | pass |
-| mysql.protocol | Optional | Connection protocol to MySQL | string | tcp |
-| mysql.addr | Optional | MySQL remote address | string | localhost:3306 |
-| mysql.database.name | Required | Name of database | string | "" |
-| mysql.database.autoCreate | Optional | Create DB if missing | bool | false |
-| mysql.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
-| mysql.database.params | Optional | Connection params | []string | ["charset=utf8mb4","parseTime=True","loc=Local"] |
-| mysql.logger.encoding | Optional | Log encoding type, json & console are available options | string | console |
-| mysql.logger.outputPaths | Optional | Output paths of logger | []string | [stdout] |
-| mysql.logger.level | Optional | Logger level, options: silent, error, warn, info | string | warn |
+| postgres.name | Required | The name of entry | string | PostgreSQL |
+| postgres.enabled | Required | Enable entry or not | bool | false |
+| postgres.locale | Required | See locale description bellow | string | "" |
+| postgres.description | Optional | Description of echo entry. | string | "" |
+| postgres.user | Optional | PostgreSQL username | string | postgres |
+| postgres.pass | Optional | PostgreSQL password | string | pass |
+| postgres.addr | Optional | PostgreSQL remote address | string | localhost:5432 |
+| postgres.database.name | Required | Name of database | string | "" |
+| postgres.database.autoCreate | Optional | Create DB if missing | bool | false |
+| postgres.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
+| postgres.database.preferSimpleProtocol | Optional | Disable prepared statement cache | bool | false |
+| postgres.database.params | Optional | Connection params | []string | ["sslmode=disable","TimeZone=Asia/Shanghai"] |
+| postgres.logger.encoding | Optional | Log encoding type, json & console are available options | string | console |
+| postgres.logger.outputPaths | Optional | Output paths of logger | []string | [stdout] |
+| postgres.logger.level | Optional | Logger level, options: silent, error, warn, info | string | warn |
 
 ### Usage of locale
 

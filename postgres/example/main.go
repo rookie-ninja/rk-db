@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot"
 	"github.com/rookie-ninja/rk-boot/gin"
-	"github.com/rookie-ninja/rk-db/mysql"
+	"github.com/rookie-ninja/rk-db/postgres"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -24,8 +24,8 @@ func main() {
 	boot.Bootstrap(context.TODO())
 
 	// Auto migrate database and init global userDb variable
-	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
-	userDb = mysqlEntry.GetDB("user")
+	pgEntry := rkpostgres.GetPostgresEntry("user-db")
+	userDb = pgEntry.GetDB("user")
 	if !userDb.DryRun {
 		userDb.AutoMigrate(&User{})
 	}
