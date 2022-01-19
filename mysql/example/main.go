@@ -77,6 +77,12 @@ func GetUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, res.Error)
 		return
 	}
+
+	if res.RowsAffected < 1 {
+		ctx.JSON(http.StatusNotFound, "user not found")
+		return
+	}
+
 	ctx.JSON(http.StatusOK, user)
 }
 
