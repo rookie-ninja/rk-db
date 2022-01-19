@@ -235,7 +235,7 @@ func RegisterSqliteEntry(opts ...Option) *SqliteEntry {
 		}
 	}
 
-	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig); err != nil {
+	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig, zap.AddCaller()); err != nil {
 		rkcommon.ShutdownWithError(err)
 	} else {
 		entry.Logger = logger
@@ -281,7 +281,7 @@ func (entry *SqliteEntry) Bootstrap(ctx context.Context) {
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
-		entry.Logger.Error("failed to connect to database", zap.Error(err))
+		entry.Logger.Error("Failed to connect to database", zap.Error(err))
 		rkcommon.ShutdownWithError(errors.New("failed to connect to database"))
 	}
 }
@@ -343,7 +343,7 @@ func (entry *SqliteEntry) connect() error {
 		var err error
 		var dbFile string
 
-		entry.Logger.Info(fmt.Sprintf("connecting to database %s", innerDb.name))
+		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 
 		// 1: create directory if missing
 		if !path.IsAbs(innerDb.dbDir) {
@@ -380,7 +380,7 @@ func (entry *SqliteEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.Logger.Info(fmt.Sprintf("connecting to database %s success", innerDb.name))
+		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil

@@ -277,7 +277,7 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 		}
 	}
 
-	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig); err != nil {
+	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig, zap.AddCaller()); err != nil {
 		rkcommon.ShutdownWithError(err)
 	} else {
 		entry.Logger = logger
@@ -325,7 +325,7 @@ func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
-		entry.Logger.Error("failed to connect to database", zap.Error(err))
+		entry.Logger.Error("Failed to connect to database", zap.Error(err))
 		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s@%s",
 			entry.User, entry.Addr))
 	}
@@ -410,7 +410,7 @@ func (entry *PostgresEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.Logger.Info(fmt.Sprintf("creating database %s if not exists", innerDb.name))
+			entry.Logger.Info(fmt.Sprintf("Creating database [%s] if not exists", innerDb.name))
 
 			// It is a little bit complex procedure here
 			// connect to database postgres and try to create DB
@@ -444,10 +444,10 @@ func (entry *PostgresEntry) connect() error {
 				}
 			}
 
-			entry.Logger.Info(fmt.Sprintf("creating successs or database %s exists", innerDb.name))
+			entry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.Logger.Info(fmt.Sprintf("connecting to database %s", innerDb.name))
+		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 
 		// 2: connect
 		params = append(params, fmt.Sprintf("dbname=%s", innerDb.name))
@@ -461,7 +461,7 @@ func (entry *PostgresEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.Logger.Info(fmt.Sprintf("connecting to database %s success", innerDb.name))
+		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil

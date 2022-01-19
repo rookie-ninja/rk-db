@@ -267,7 +267,7 @@ func RegisterClickHouseEntry(opts ...Option) *ClickHouseEntry {
 		}
 	}
 
-	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig); err != nil {
+	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig, zap.AddCaller()); err != nil {
 		rkcommon.ShutdownWithError(err)
 	} else {
 		entry.Logger = logger
@@ -315,7 +315,7 @@ func (entry *ClickHouseEntry) Bootstrap(ctx context.Context) {
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
-		entry.Logger.Error("failed to connect to database", zap.Error(err))
+		entry.Logger.Error("Failed to connect to database", zap.Error(err))
 		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s",
 			entry.User, "****", entry.Addr))
 	}
@@ -388,7 +388,7 @@ func (entry *ClickHouseEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.Logger.Info(fmt.Sprintf("creating database %s if not exists", innerDb.name))
+			entry.Logger.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
 			dsn := fmt.Sprintf("tcp://%s?%s", entry.Addr, strings.Join(credentialParams, "&"))
 
 			db, err = gorm.Open(clickhouse.Open(dsn), entry.GormConfigMap[innerDb.name])
@@ -409,10 +409,10 @@ func (entry *ClickHouseEntry) connect() error {
 				return db.Error
 			}
 
-			entry.Logger.Info(fmt.Sprintf("creating successs or database %s exists", innerDb.name))
+			entry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.Logger.Info(fmt.Sprintf("connecting to database %s", innerDb.name))
+		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 		params := []string{
 			innerDb.name,
 		}
@@ -429,7 +429,7 @@ func (entry *ClickHouseEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.Logger.Info(fmt.Sprintf("connecting to database %s success", innerDb.name))
+		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil
