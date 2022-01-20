@@ -321,10 +321,6 @@ func (entry *RedisEntry) Interrupt(ctx context.Context) {
 		zap.String("entryName", entry.EntryName),
 		zap.String("clientType", entry.ClientType))
 
-	if entry.Client != nil {
-		entry.Client.ShutdownSave(ctx)
-	}
-
 	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
 }
 
