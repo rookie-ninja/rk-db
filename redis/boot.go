@@ -33,41 +33,43 @@ const (
 )
 
 type BootConfig struct {
-	Redis []struct {
-		Name                 string   `yaml:"name" json:"name"` // Required
-		Description          string   `yaml:"description" json:"description"`
-		Enabled              bool     `yaml:"enabled" json:"enabled"` // Required
-		Addrs                []string `yaml:"addrs" json:"addrs"`     // Required
-		MasterName           string   `yaml:"masterName" json:"masterName"`
-		SentinelPass         string   `yaml:"sentinelPass" json:"sentinelPass"`
-		DB                   int      `yaml:"db" json:"db"`     // Required
-		User                 string   `yaml:"user" json:"user"` // Required
-		Pass                 string   `yaml:"pass" json:"pass"` // Required
-		MaxRetries           int      `yaml:"maxRetries" json:"maxRetries"`
-		MinRetryBackoffMs    int      `yaml:"minRetryBackoffMs" json:"minRetryBackoffMs"`
-		MaxRetryBackoffMs    int      `yaml:"maxRetryBackoffMs" json:"maxRetryBackoffMs"`
-		DialTimeoutMs        int      `yaml:"dialTimeoutMs" json:"dialTimeoutMs"`
-		ReadTimeoutMs        int      `yaml:"readTimeoutMs" json:"readTimeoutMs"`
-		WriteTimeoutMs       int      `yaml:"writeTimeoutMs" json:"writeTimeoutMs"`
-		PoolFIFO             bool     `yaml:"poolFIFO" json:"poolFIFO"`
-		PoolSize             int      `yaml:"poolSize" json:"poolSize"`
-		MinIdleConn          int      `yaml:"minIdleConn" json:"minIdleConn"`
-		MaxConnAgeMs         int      `yaml:"maxConnAgeMs" json:"maxConnAgeMs"`
-		PoolTimeoutMs        int      `yaml:"poolTimeoutMs" json:"poolTimeoutMs"`
-		IdleTimeoutMs        int      `yaml:"idleTimeoutMs" json:"idleTimeoutMs"`
-		IdleCheckFrequencyMs int      `yaml:"idleCheckFrequencyMs" json:"idleCheckFrequencyMs"`
-		MaxRedirects         int      `yaml:"maxRedirects" json:"maxRedirects"`
-		ReadOnly             bool     `yaml:"readOnly" json:"readOnly"`
-		RouteByLatency       bool     `yaml:"routeByLatency" json:"routeByLatency"`
-		RouteRandomly        bool     `yaml:"routeRandomly" json:"routeRandomly"`
-		Logger               struct {
-			Encoding    string   `yaml:"encoding" json:"encoding"`
-			OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
-		}
-		Cert struct {
-			Ref string `yaml:"ref" json:"ref"`
-		} `yaml:"cert" json:"cert"`
+	Redis []BootConfigRedis `mapstructure:",squash"`
+}
+
+type BootConfigRedis struct {
+	Name                 string   `yaml:"name" json:"name"` // Required
+	Description          string   `yaml:"description" json:"description"`
+	Enabled              bool     `yaml:"enabled" json:"enabled"` // Required
+	Addrs                []string `yaml:"addrs" json:"addrs"`     // Required
+	MasterName           string   `yaml:"masterName" json:"masterName"`
+	SentinelPass         string   `yaml:"sentinelPass" json:"sentinelPass"`
+	DB                   int      `yaml:"db" json:"db"`     // Required
+	User                 string   `yaml:"user" json:"user"` // Required
+	Pass                 string   `yaml:"pass" json:"pass"` // Required
+	MaxRetries           int      `yaml:"maxRetries" json:"maxRetries"`
+	MinRetryBackoffMs    int      `yaml:"minRetryBackoffMs" json:"minRetryBackoffMs"`
+	MaxRetryBackoffMs    int      `yaml:"maxRetryBackoffMs" json:"maxRetryBackoffMs"`
+	DialTimeoutMs        int      `yaml:"dialTimeoutMs" json:"dialTimeoutMs"`
+	ReadTimeoutMs        int      `yaml:"readTimeoutMs" json:"readTimeoutMs"`
+	WriteTimeoutMs       int      `yaml:"writeTimeoutMs" json:"writeTimeoutMs"`
+	PoolFIFO             bool     `yaml:"poolFIFO" json:"poolFIFO"`
+	PoolSize             int      `yaml:"poolSize" json:"poolSize"`
+	MinIdleConn          int      `yaml:"minIdleConn" json:"minIdleConn"`
+	MaxConnAgeMs         int      `yaml:"maxConnAgeMs" json:"maxConnAgeMs"`
+	PoolTimeoutMs        int      `yaml:"poolTimeoutMs" json:"poolTimeoutMs"`
+	IdleTimeoutMs        int      `yaml:"idleTimeoutMs" json:"idleTimeoutMs"`
+	IdleCheckFrequencyMs int      `yaml:"idleCheckFrequencyMs" json:"idleCheckFrequencyMs"`
+	MaxRedirects         int      `yaml:"maxRedirects" json:"maxRedirects"`
+	ReadOnly             bool     `yaml:"readOnly" json:"readOnly"`
+	RouteByLatency       bool     `yaml:"routeByLatency" json:"routeByLatency"`
+	RouteRandomly        bool     `yaml:"routeRandomly" json:"routeRandomly"`
+	Logger               struct {
+		Encoding    string   `yaml:"encoding" json:"encoding"`
+		OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
 	}
+	Cert struct {
+		Ref string `yaml:"ref" json:"ref"`
+	} `yaml:"cert" json:"cert"`
 }
 
 func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entry {
