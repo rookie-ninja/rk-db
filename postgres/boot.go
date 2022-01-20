@@ -18,18 +18,11 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"os"
-	"path"
 	"strings"
 	"time"
 )
 
 const (
-	// EncodingConsole console encoding style of logging
-	EncodingConsole = "console"
-	// EncodingJson console encoding style of logging
-	EncodingJson = "json"
-
 	// LoggerLevelSilent set logger level of gorm as silent
 	LoggerLevelSilent = "silent"
 	// LoggerLevelError set logger level of gorm as error
@@ -241,7 +234,7 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 		Addr:             "localhost:5432",
 		innerDbList:      make([]*databaseInner, 0),
 		loggerOutputPath: make([]string, 0),
-		loggerEncoding:   EncodingConsole,
+		loggerEncoding:   rklogger.EncodingConsole,
 		loggerLevel:      LoggerLevelWarn,
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
@@ -261,23 +254,7 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 
 	// Override zap logger encoding and output path if provided by user
 	// Override encoding type
-	zapLoggerConfig := rklogger.NewZapStdoutConfig()
-	lumberjackConfig := rklogger.NewLumberjackConfigDefault()
-	if entry.loggerEncoding == EncodingJson || len(entry.loggerOutputPath) > 0 {
-		if entry.loggerEncoding == EncodingJson {
-			zapLoggerConfig.Encoding = "json"
-		}
-
-		if len(entry.loggerOutputPath) > 0 {
-			zapLoggerConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
-		}
-
-		if lumberjackConfig == nil {
-			lumberjackConfig = rklogger.NewLumberjackConfigDefault()
-		}
-	}
-
-	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig, zap.AddCaller()); err != nil {
+	if logger, err := rklogger.NewZapLoggerWithOverride(entry.loggerEncoding, entry.loggerOutputPath...); err != nil {
 		rkcommon.ShutdownWithError(err)
 	} else {
 		entry.Logger = logger
@@ -465,22 +442,6 @@ func (entry *PostgresEntry) connect() error {
 	}
 
 	return nil
-}
-
-// Make incoming paths to absolute path with current working directory attached as prefix
-func toAbsPath(p ...string) []string {
-	res := make([]string, 0)
-
-	for i := range p {
-		newPath := p[i]
-		if !path.IsAbs(p[i]) {
-			wd, _ := os.Getwd()
-			newPath = path.Join(wd, p[i])
-		}
-		res = append(res, newPath)
-	}
-
-	return res
 }
 
 // Copy zap.Config

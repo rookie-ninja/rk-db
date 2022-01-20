@@ -1,7 +1,14 @@
+// Copyright (c) 2021 rookie-ninja
+//
+// Use of this source code is governed by an Apache-style
+// license that can be found in the LICENSE file.
+
+// Package rkredis is an implementation of rkentry.Entry which could be used redis client instance.
 package rkredis
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
@@ -9,8 +16,6 @@ import (
 	"github.com/rookie-ninja/rk-entry/entry"
 	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
-	"os"
-	"path"
 	"strings"
 	"time"
 )
@@ -22,20 +27,31 @@ func init() {
 }
 
 const (
-	// EncodingConsole console encoding style of logging
-	EncodingConsole = "console"
-	// EncodingJson console encoding style of logging
-	EncodingJson = "json"
-
 	ha      = "HA"
 	cluster = "Cluster"
 	single  = "Single"
 )
 
-type BootConfig struct {
-	Redis []BootConfigRedis `mapstructure:",squash"`
+// GetRedisEntry returns RedisEntry
+func GetRedisEntry(entryName string) *RedisEntry {
+	if v := rkentry.GlobalAppCtx.GetEntry(entryName); v != nil {
+		if res, ok := v.(*RedisEntry); ok {
+			return res
+		}
+	}
+
+	return nil
 }
 
+// BootConfig
+// Redis entry boot config which reflects to YAML config
+type BootConfig struct {
+	Redis []struct {
+		BootConfigRedis `mapstructure:",squash"`
+	} `yaml:"redis" json:"redis"`
+}
+
+// BootConfigRedis sub struct for BootConfig
 type BootConfigRedis struct {
 	Name                 string   `yaml:"name" json:"name"` // Required
 	Description          string   `yaml:"description" json:"description"`
@@ -66,12 +82,46 @@ type BootConfigRedis struct {
 	Logger               struct {
 		Encoding    string   `yaml:"encoding" json:"encoding"`
 		OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
-	}
+	} `yaml:"logger" json:"logger"`
 	Cert struct {
 		Ref string `yaml:"ref" json:"ref"`
 	} `yaml:"cert" json:"cert"`
 }
 
+// ToRedisUniversalOptions convert BootConfigRedis to redis.UniversalOptions
+func ToRedisUniversalOptions(config *BootConfigRedis) *redis.UniversalOptions {
+	if config.Enabled {
+		return &redis.UniversalOptions{
+			Addrs:              config.Addrs,
+			DB:                 config.DB,
+			Username:           config.User,
+			Password:           config.Pass,
+			SentinelPassword:   config.SentinelPass,
+			MaxRetries:         config.MaxRetries,
+			MinRetryBackoff:    time.Duration(config.MinRetryBackoffMs) * time.Millisecond,
+			MaxRetryBackoff:    time.Duration(config.MaxRetryBackoffMs) * time.Millisecond,
+			DialTimeout:        time.Duration(config.DialTimeoutMs) * time.Millisecond,
+			ReadTimeout:        time.Duration(config.ReadTimeoutMs) * time.Millisecond,
+			WriteTimeout:       time.Duration(config.WriteTimeoutMs) * time.Millisecond,
+			PoolFIFO:           config.PoolFIFO,
+			PoolSize:           config.PoolSize,
+			MinIdleConns:       config.MinIdleConn,
+			MaxConnAge:         time.Duration(config.MaxConnAgeMs) * time.Millisecond,
+			PoolTimeout:        time.Duration(config.PoolTimeoutMs) * time.Millisecond,
+			IdleTimeout:        time.Duration(config.IdleTimeoutMs) * time.Millisecond,
+			IdleCheckFrequency: time.Duration(config.IdleCheckFrequencyMs) * time.Millisecond,
+			MaxRedirects:       config.MaxRedirects,
+			ReadOnly:           config.ReadOnly,
+			RouteByLatency:     config.RouteByLatency,
+			RouteRandomly:      config.RouteRandomly,
+			MasterName:         config.MasterName,
+		}
+	} else {
+		return nil
+	}
+}
+
+// RegisterRedisEntryFromConfig register RedisEntry based on config file into rkentry.GlobalAppCtx
 func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
@@ -126,13 +176,14 @@ func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entr
 	return res
 }
 
+// RegisterRedisEntry will register Entry into GlobalAppCtx
 func RegisterRedisEntry(opts ...Option) *RedisEntry {
 	entry := &RedisEntry{
 		EntryName:        "Redis",
 		EntryType:        "Redis",
 		EntryDescription: "Redis entry for go-redis client",
 		loggerOutputPath: make([]string, 0),
-		loggerEncoding:   EncodingConsole,
+		loggerEncoding:   rklogger.EncodingConsole,
 		Opts: &redis.UniversalOptions{
 			Addrs: []string{"localhost:6379"},
 		},
@@ -142,35 +193,23 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 		opts[i](entry)
 	}
 
+	if len(entry.Opts.Addrs) < 1 {
+		entry.Opts.Addrs = append(entry.Opts.Addrs, "localhost:6379")
+	}
+
 	if len(entry.EntryName) < 1 {
 		entry.EntryName = "redis-" + strings.Join(entry.Opts.Addrs, "-")
 	}
 
 	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
+		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s",
 			entry.EntryType,
 			entry.EntryName)
 	}
 
 	// Override zap logger encoding and output path if provided by user
 	// Override encoding type
-	zapLoggerConfig := rklogger.NewZapStdoutConfig()
-	lumberjackConfig := rklogger.NewLumberjackConfigDefault()
-	if entry.loggerEncoding == EncodingJson || len(entry.loggerOutputPath) > 0 {
-		if entry.loggerEncoding == EncodingJson {
-			zapLoggerConfig.Encoding = "json"
-		}
-
-		if len(entry.loggerOutputPath) > 0 {
-			zapLoggerConfig.OutputPaths = toAbsPath(entry.loggerOutputPath...)
-		}
-
-		if lumberjackConfig == nil {
-			lumberjackConfig = rklogger.NewLumberjackConfigDefault()
-		}
-	}
-
-	if logger, err := rklogger.NewZapLoggerWithConf(zapLoggerConfig, lumberjackConfig, zap.AddCaller()); err != nil {
+	if logger, err := rklogger.NewZapLoggerWithOverride(entry.loggerEncoding, entry.loggerOutputPath...); err != nil {
 		rkcommon.ShutdownWithError(err)
 	} else {
 		entry.Logger = logger
@@ -183,6 +222,7 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 	return entry
 }
 
+// Option for RedisEntry
 type Option func(e *RedisEntry)
 
 // WithName provide name.
@@ -199,12 +239,14 @@ func WithDescription(description string) Option {
 	}
 }
 
+// WithCertEntry provide CertEntry
 func WithCertEntry(in *rkentry.CertEntry) Option {
 	return func(entry *RedisEntry) {
-		entry.CertEntry = in
+		entry.certEntry = in
 	}
 }
 
+// WithUniversalOption provide redis.UniversalOptions
 func WithUniversalOption(opt *redis.UniversalOptions) Option {
 	return func(e *RedisEntry) {
 		if opt != nil {
@@ -229,19 +271,21 @@ func WithLoggerOutputPaths(path ...string) Option {
 	}
 }
 
+// RedisEntry will init redis.Client with provided arguments
 type RedisEntry struct {
 	EntryName        string                  `yaml:"entryName" yaml:"entryName"`
 	EntryType        string                  `yaml:"entryType" yaml:"entryType"`
 	EntryDescription string                  `yaml:"-" json:"-"`
 	ClientType       string                  `yaml:"clientType" json:"clientType"`
 	Opts             *redis.UniversalOptions `yaml:"-" json:"-"`
-	CertEntry        *rkentry.CertEntry      `yaml:"-" json:"-"`
+	certEntry        *rkentry.CertEntry      `yaml:"-" json:"-"`
 	loggerEncoding   string                  `yaml:"-" json:"-"`
 	loggerOutputPath []string                `yaml:"-" json:"-"`
 	Logger           *zap.Logger             `yaml:"-" json:"-"`
 	Client           redis.UniversalClient   `yaml:"-" json:"-"`
 }
 
+// Bootstrap RedisEntry
 func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 	if entry.Opts.MasterName != "" {
 		entry.ClientType = ha
@@ -255,6 +299,15 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 		zap.String("entryName", entry.EntryName),
 		zap.String("clientType", entry.ClientType))
 
+	if entry.IsTlsEnabled() {
+		if cert, err := tls.X509KeyPair(entry.certEntry.Store.ServerCert, entry.certEntry.Store.ServerKey); err != nil {
+			entry.Logger.Error("Error occurs while parsing TLS.")
+			rkcommon.ShutdownWithError(err)
+		} else {
+			entry.Opts.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+		}
+	}
+
 	entry.Client = redis.NewUniversalClient(entry.Opts)
 
 	if entry.Client != nil {
@@ -262,26 +315,35 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 	}
 }
 
+// Interrupt RedisEntry
 func (entry *RedisEntry) Interrupt(ctx context.Context) {
 	entry.Logger.Info("Interrupt redis entry",
 		zap.String("entryName", entry.EntryName),
 		zap.String("clientType", entry.ClientType))
 
-	entry.Client.ShutdownSave(ctx)
+	if entry.Client != nil {
+		entry.Client.ShutdownSave(ctx)
+	}
+
+	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
 }
 
+// GetName returns entry name
 func (entry *RedisEntry) GetName() string {
 	return entry.EntryName
 }
 
+// GetType returns entry type
 func (entry *RedisEntry) GetType() string {
 	return entry.EntryType
 }
 
+// GetDescription returns entry description
 func (entry *RedisEntry) GetDescription() string {
 	return entry.EntryDescription
 }
 
+// String returns json marshalled string
 func (entry *RedisEntry) String() string {
 	bytes, err := json.Marshal(entry)
 	if err != nil || len(bytes) < 1 {
@@ -291,6 +353,12 @@ func (entry *RedisEntry) String() string {
 	return string(bytes)
 }
 
+// IsTlsEnabled checks TLS
+func (entry *RedisEntry) IsTlsEnabled() bool {
+	return entry.certEntry != nil && entry.certEntry.Store != nil
+}
+
+// GetClient convert redis.UniversalClient to proper redis.Client
 func (entry *RedisEntry) GetClient() (*redis.Client, bool) {
 	if entry.Client != nil && (entry.ClientType == ha || entry.ClientType == single) {
 		if v, ok := entry.Client.(*redis.Client); ok {
@@ -301,6 +369,7 @@ func (entry *RedisEntry) GetClient() (*redis.Client, bool) {
 	return nil, false
 }
 
+// GetClient convert redis.UniversalClient to proper redis.ClusterClient
 func (entry *RedisEntry) GetClientCluster() (*redis.ClusterClient, bool) {
 	if entry.Client != nil && entry.ClientType == cluster {
 		if v, ok := entry.Client.(*redis.ClusterClient); ok {
@@ -309,20 +378,4 @@ func (entry *RedisEntry) GetClientCluster() (*redis.ClusterClient, bool) {
 	}
 
 	return nil, false
-}
-
-// Make incoming paths to absolute path with current working directory attached as prefix
-func toAbsPath(p ...string) []string {
-	res := make([]string, 0)
-
-	for i := range p {
-		newPath := p[i]
-		if !path.IsAbs(p[i]) {
-			wd, _ := os.Getwd()
-			newPath = path.Join(wd, p[i])
-		}
-		res = append(res, newPath)
-	}
-
-	return res
 }

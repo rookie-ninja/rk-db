@@ -7,12 +7,12 @@ package rkclickhouse
 import (
 	"context"
 	"github.com/rookie-ninja/rk-entry/entry"
+	rklogger "github.com/rookie-ninja/rk-logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"testing"
 )
 
@@ -29,7 +29,7 @@ func TestRegisterClickHouseEntry(t *testing.T) {
 	assert.Equal(t, "localhost:9000", entry.Addr)
 	assert.Empty(t, entry.GormDbMap)
 	assert.Empty(t, entry.GormConfigMap)
-	assert.Equal(t, EncodingConsole, entry.loggerEncoding)
+	assert.Equal(t, rklogger.EncodingConsole, entry.loggerEncoding)
 	assert.Equal(t, LoggerLevelWarn, entry.loggerLevel)
 	assert.Empty(t, entry.loggerOutputPath)
 	assert.NotNil(t, entry.Logger)
@@ -45,7 +45,7 @@ func TestRegisterClickHouseEntry(t *testing.T) {
 		WithPass("ut-pass"),
 		WithAddr("ut-addr"),
 		WithDatabase("ut-database", true, false),
-		WithLoggerEncoding(EncodingJson),
+		WithLoggerEncoding(rklogger.EncodingJson),
 		WithLoggerOutputPaths("ut-output"),
 		WithLoggerLevel(LoggerLevelInfo))
 
@@ -58,7 +58,7 @@ func TestRegisterClickHouseEntry(t *testing.T) {
 	assert.Equal(t, "ut-addr", entry.Addr)
 	assert.Empty(t, entry.GormDbMap)
 	assert.NotEmpty(t, entry.GormConfigMap)
-	assert.Equal(t, EncodingJson, entry.loggerEncoding)
+	assert.Equal(t, rklogger.EncodingJson, entry.loggerEncoding)
 	assert.Equal(t, LoggerLevelInfo, entry.loggerLevel)
 	assert.NotEmpty(t, entry.loggerOutputPath)
 	assert.NotNil(t, entry.Logger)
@@ -71,7 +71,7 @@ func TestClickHouseEntry_IsHealthy(t *testing.T) {
 	// test with dry run enabled
 	entry := RegisterClickHouseEntry(
 		WithLoggerLevel(LoggerLevelInfo),
-		WithLoggerEncoding(EncodingConsole))
+		WithLoggerEncoding(rklogger.EncodingConsole))
 	entry.Bootstrap(context.TODO())
 
 	assert.True(t, entry.IsHealthy())
@@ -105,13 +105,6 @@ func TestCopyZapLoggerConfig(t *testing.T) {
 	assert.Equal(t, src.OutputPaths, target.OutputPaths)
 	assert.Equal(t, src.ErrorOutputPaths, target.ErrorOutputPaths)
 	assert.Equal(t, src.InitialFields, target.InitialFields)
-}
-
-func TestToAbsPath(t *testing.T) {
-	res := toAbsPath("ut-path")
-	assert.Len(t, res, 1)
-
-	assert.True(t, strings.HasPrefix(res[0], "/"))
 }
 
 func TestGetClickHouseEntry(t *testing.T) {
