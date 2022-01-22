@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot"
 	"github.com/rookie-ninja/rk-boot/gin"
@@ -28,6 +29,16 @@ func main() {
 	userDb = mysqlEntry.GetDB("user")
 	if !userDb.DryRun {
 		userDb.AutoMigrate(&User{})
+	}
+
+	db, _ := userDb.DB()
+	res, _ := db.Query("SHOW TABLES")
+
+	var table string
+
+	for res.Next() {
+		res.Scan(&table)
+		fmt.Println(table)
 	}
 
 	// Register APIs

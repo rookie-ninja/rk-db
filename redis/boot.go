@@ -222,55 +222,6 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 	return entry
 }
 
-// Option for RedisEntry
-type Option func(e *RedisEntry)
-
-// WithName provide name.
-func WithName(name string) Option {
-	return func(entry *RedisEntry) {
-		entry.EntryName = name
-	}
-}
-
-// WithDescription provide name.
-func WithDescription(description string) Option {
-	return func(entry *RedisEntry) {
-		entry.EntryDescription = description
-	}
-}
-
-// WithCertEntry provide CertEntry
-func WithCertEntry(in *rkentry.CertEntry) Option {
-	return func(entry *RedisEntry) {
-		entry.certEntry = in
-	}
-}
-
-// WithUniversalOption provide redis.UniversalOptions
-func WithUniversalOption(opt *redis.UniversalOptions) Option {
-	return func(e *RedisEntry) {
-		if opt != nil {
-			e.Opts = opt
-		}
-	}
-}
-
-// WithLoggerEncoding provide console=0, json=1.
-// json or console is supported.
-func WithLoggerEncoding(ec string) Option {
-	return func(m *RedisEntry) {
-		m.loggerEncoding = strings.ToLower(ec)
-	}
-}
-
-// WithLoggerOutputPaths provide Logger Output Path.
-// Multiple output path could be supported including stdout.
-func WithLoggerOutputPaths(path ...string) Option {
-	return func(m *RedisEntry) {
-		m.loggerOutputPath = append(m.loggerOutputPath, path...)
-	}
-}
-
 // RedisEntry will init redis.Client with provided arguments
 type RedisEntry struct {
 	EntryName        string                  `yaml:"entryName" yaml:"entryName"`
@@ -374,4 +325,55 @@ func (entry *RedisEntry) GetClientCluster() (*redis.ClusterClient, bool) {
 	}
 
 	return nil, false
+}
+
+// ************* Option *************
+
+// Option for RedisEntry
+type Option func(e *RedisEntry)
+
+// WithName provide name.
+func WithName(name string) Option {
+	return func(entry *RedisEntry) {
+		entry.EntryName = name
+	}
+}
+
+// WithDescription provide name.
+func WithDescription(description string) Option {
+	return func(entry *RedisEntry) {
+		entry.EntryDescription = description
+	}
+}
+
+// WithCertEntry provide CertEntry
+func WithCertEntry(in *rkentry.CertEntry) Option {
+	return func(entry *RedisEntry) {
+		entry.certEntry = in
+	}
+}
+
+// WithUniversalOption provide redis.UniversalOptions
+func WithUniversalOption(opt *redis.UniversalOptions) Option {
+	return func(e *RedisEntry) {
+		if opt != nil {
+			e.Opts = opt
+		}
+	}
+}
+
+// WithLoggerEncoding provide console=0, json=1.
+// json or console is supported.
+func WithLoggerEncoding(ec string) Option {
+	return func(m *RedisEntry) {
+		m.loggerEncoding = strings.ToLower(ec)
+	}
+}
+
+// WithLoggerOutputPaths provide Logger Output Path.
+// Multiple output path could be supported including stdout.
+func WithLoggerOutputPaths(path ...string) Option {
+	return func(m *RedisEntry) {
+		m.loggerOutputPath = append(m.loggerOutputPath, path...)
+	}
 }
