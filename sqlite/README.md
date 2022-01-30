@@ -87,9 +87,7 @@ sqlite:
 #        dryRun: true                 # Optional, default: false
 #        params: []                   # Optional, default: ["cache=shared"]
 #    logger:
-#      level: warn                    # Optional, default: warn
-#      encoding: json                 # Optional, default: console
-#      outputPaths: [ "sqlite/log" ]  # Optional, default: []
+#      zapLogger: zap                 # Optional, default: default logger with STDOUT
 ```
 
 ### 2.Create main.go
