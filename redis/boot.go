@@ -14,7 +14,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/rookie-ninja/rk-common/common"
 	"github.com/rookie-ninja/rk-entry/entry"
-	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
 	"strings"
 	"time"
@@ -46,9 +45,7 @@ func GetRedisEntry(entryName string) *RedisEntry {
 // BootConfig
 // Redis entry boot config which reflects to YAML config
 type BootConfig struct {
-	Redis []struct {
-		BootConfigRedis `mapstructure:",squash"`
-	} `yaml:"redis" json:"redis"`
+	Redis []BootConfigRedis `yaml:"redis" json:"redis"`
 }
 
 // BootConfigRedis sub struct for BootConfig
@@ -80,12 +77,9 @@ type BootConfigRedis struct {
 	RouteByLatency       bool     `yaml:"routeByLatency" json:"routeByLatency"`
 	RouteRandomly        bool     `yaml:"routeRandomly" json:"routeRandomly"`
 	Logger               struct {
-		Encoding    string   `yaml:"encoding" json:"encoding"`
-		OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
+		ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
 	} `yaml:"logger" json:"logger"`
-	Cert struct {
-		Ref string `yaml:"ref" json:"ref"`
-	} `yaml:"cert" json:"cert"`
+	CertEntry string `yaml:"certEntry" json:"certEntry"`
 }
 
 // ToRedisUniversalOptions convert BootConfigRedis to redis.UniversalOptions
@@ -159,15 +153,14 @@ func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entr
 				MasterName:         element.MasterName,
 			}
 
-			certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.Cert.Ref)
+			certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.CertEntry)
 
 			entry := RegisterRedisEntry(
 				WithName(element.Name),
 				WithDescription(element.Description),
 				WithUniversalOption(universalOpt),
 				WithCertEntry(certEntry),
-				WithLoggerEncoding(element.Logger.Encoding),
-				WithLoggerOutputPaths(element.Logger.OutputPaths...))
+				WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)))
 
 			res[entry.GetName()] = entry
 		}
@@ -182,8 +175,7 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 		EntryName:        "Redis",
 		EntryType:        "Redis",
 		EntryDescription: "Redis entry for go-redis client",
-		loggerOutputPath: make([]string, 0),
-		loggerEncoding:   rklogger.EncodingConsole,
+		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
 		Opts: &redis.UniversalOptions{
 			Addrs: []string{"localhost:6379"},
 		},
@@ -207,15 +199,7 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 			entry.EntryName)
 	}
 
-	// Override zap logger encoding and output path if provided by user
-	// Override encoding type
-	if logger, err := rklogger.NewZapLoggerWithOverride(entry.loggerEncoding, entry.loggerOutputPath...); err != nil {
-		rkcommon.ShutdownWithError(err)
-	} else {
-		entry.Logger = logger
-	}
-
-	redis.SetLogger(NewLogger(entry.Logger))
+	redis.SetLogger(NewLogger(entry.zapLoggerEntry.Logger))
 
 	rkentry.GlobalAppCtx.AddEntry(entry)
 
@@ -230,9 +214,7 @@ type RedisEntry struct {
 	ClientType       string                  `yaml:"clientType" json:"clientType"`
 	Opts             *redis.UniversalOptions `yaml:"-" json:"-"`
 	certEntry        *rkentry.CertEntry      `yaml:"-" json:"-"`
-	loggerEncoding   string                  `yaml:"-" json:"-"`
-	loggerOutputPath []string                `yaml:"-" json:"-"`
-	Logger           *zap.Logger             `yaml:"-" json:"-"`
+	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
 	Client           redis.UniversalClient   `yaml:"-" json:"-"`
 }
 
@@ -246,13 +228,25 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 		entry.ClientType = single
 	}
 
-	entry.Logger.Info("Bootstrap redis entry",
+	// extract eventId if exists
+	fields := make([]zap.Field, 0)
+
+	if val := ctx.Value("eventId"); val != nil {
+		if id, ok := val.(string); ok {
+			fields = append(fields, zap.String("eventId", id))
+		}
+	}
+
+	fields = append(fields,
 		zap.String("entryName", entry.EntryName),
+		zap.String("entryType", entry.EntryType),
 		zap.String("clientType", entry.ClientType))
+
+	entry.zapLoggerEntry.Logger.Info("Bootstrap redisEntry", fields...)
 
 	if entry.IsTlsEnabled() {
 		if cert, err := tls.X509KeyPair(entry.certEntry.Store.ServerCert, entry.certEntry.Store.ServerKey); err != nil {
-			entry.Logger.Error("Error occurs while parsing TLS.")
+			entry.zapLoggerEntry.Logger.Error("Error occurs while parsing TLS.")
 			rkcommon.ShutdownWithError(err)
 		} else {
 			entry.Opts.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
@@ -268,11 +262,21 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 
 // Interrupt RedisEntry
 func (entry *RedisEntry) Interrupt(ctx context.Context) {
-	entry.Logger.Info("Interrupt redis entry",
+	// extract eventId if exists
+	fields := make([]zap.Field, 0)
+
+	if val := ctx.Value("eventId"); val != nil {
+		if id, ok := val.(string); ok {
+			fields = append(fields, zap.String("eventId", id))
+		}
+	}
+
+	fields = append(fields,
 		zap.String("entryName", entry.EntryName),
+		zap.String("entryType", entry.EntryType),
 		zap.String("clientType", entry.ClientType))
 
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	entry.zapLoggerEntry.Logger.Info("Interrupt redisEntry", fields...)
 }
 
 // GetName returns entry name
@@ -362,18 +366,11 @@ func WithUniversalOption(opt *redis.UniversalOptions) Option {
 	}
 }
 
-// WithLoggerEncoding provide console=0, json=1.
-// json or console is supported.
-func WithLoggerEncoding(ec string) Option {
+// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
+func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
 	return func(m *RedisEntry) {
-		m.loggerEncoding = strings.ToLower(ec)
-	}
-}
-
-// WithLoggerOutputPaths provide Logger Output Path.
-// Multiple output path could be supported including stdout.
-func WithLoggerOutputPaths(path ...string) Option {
-	return func(m *RedisEntry) {
-		m.loggerOutputPath = append(m.loggerOutputPath, path...)
+		if entry != nil {
+			m.zapLoggerEntry = entry
+		}
 	}
 }

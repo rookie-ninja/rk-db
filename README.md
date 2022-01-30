@@ -10,8 +10,8 @@ This belongs to [rk-boot](https://github.com/rookie-ninja/rk-boot) family. We su
 | Sqlite | Testing | [gorm](https://gorm.io/) | go get github.com/rookie-ninja/rk-db/sqlite | See [docs](sqlite/README.md) |
 | SQL Server | Testing | [gorm](https://gorm.io/) | go get github.com/rookie-ninja/rk-db/sqlserver | See [docs](sqlserver/README.md) |
 | ClickHouse | Testing | [gorm](https://gorm.io/) | go get github.com/rookie-ninja/rk-db/clickhouse | See [docs](clickhouse/README.md) |
-| Redis | Planning | | | |
-| MongoDB | Planning | | | |
+| Redis | Testing | [go-redis](https://github.com/go-redis/redis/) | go get github.com/rookie-ninja/rk-db/redis | See [docs](redis/README.md) |
+| MongoDB | Testing | [mongo-driver](https://go.mongodb.org/mongo-driver) | go get github.com/rookie-ninja/rk-db/mongodb | See [docs](mongodb/README.md) |
 
 
 

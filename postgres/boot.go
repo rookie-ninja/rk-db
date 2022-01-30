@@ -13,24 +13,12 @@ import (
 	"fmt"
 	"github.com/rookie-ninja/rk-common/common"
 	"github.com/rookie-ninja/rk-entry/entry"
-	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"strings"
 	"time"
-)
-
-const (
-	// LoggerLevelSilent set logger level of gorm as silent
-	LoggerLevelSilent = "silent"
-	// LoggerLevelError set logger level of gorm as error
-	LoggerLevelError = "error"
-	// LoggerLevelWarn set logger level of gorm as warn
-	LoggerLevelWarn = "warn"
-	// LoggerLevelInfo set logger level of gorm as info
-	LoggerLevelInfo = "info"
 )
 
 // This must be declared in order to register registration function into rk context
@@ -58,10 +46,8 @@ type BootConfig struct {
 			PreferSimpleProtocol bool     `yaml:"preferSimpleProtocol" json:"preferSimpleProtocol"`
 		} `yaml:"database" json:"database"`
 		Logger struct {
-			Encoding    string   `yaml:"encoding" json:"encoding"`
-			Level       string   `yaml:"level" json:"level"`
-			OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
-		}
+			ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
+		} `yaml:"logger" json:"logger"`
 	} `yaml:"postgres" json:"postgres"`
 }
 
@@ -72,10 +58,7 @@ type PostgresEntry struct {
 	EntryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
-	loggerEncoding   string                  `yaml:"-" json:"-"`
-	loggerOutputPath []string                `yaml:"-" json:"-"`
-	loggerLevel      string                  `yaml:"-" json:"-"`
-	Logger           *zap.Logger             `yaml:"-" json:"-"`
+	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
 	Addr             string                  `yaml:"addr" json:"addr"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
 	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
@@ -162,27 +145,12 @@ func WithDatabase(name string, dryRun, autoCreate, preferSimpleProtocol bool, pa
 	}
 }
 
-// WithLoggerEncoding provide console=0, json=1.
-// json or console is supported.
-func WithLoggerEncoding(ec string) Option {
+// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
+func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
 	return func(m *PostgresEntry) {
-		m.loggerEncoding = strings.ToLower(ec)
-	}
-}
-
-// WithLoggerOutputPaths provide Logger Output Path.
-// Multiple output path could be supported including stdout.
-func WithLoggerOutputPaths(path ...string) Option {
-	return func(m *PostgresEntry) {
-		m.loggerOutputPath = append(m.loggerOutputPath, path...)
-	}
-}
-
-// WithLoggerLevel provide logger level in gorm
-// Available options are silent, error, warn, info which matches gorm.logger
-func WithLoggerLevel(level string) Option {
-	return func(m *PostgresEntry) {
-		m.loggerLevel = strings.ToLower(level)
+		if entry != nil {
+			m.zapLoggerEntry = entry
+		}
 	}
 }
 
@@ -205,9 +173,7 @@ func RegisterPostgresEntriesWithConfig(configFilePath string) map[string]rkentry
 			WithUser(element.User),
 			WithPass(element.Pass),
 			WithAddr(element.Addr),
-			WithLoggerEncoding(element.Logger.Encoding),
-			WithLoggerOutputPaths(element.Logger.OutputPaths...),
-			WithLoggerLevel(element.Logger.Level),
+			WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)),
 		}
 
 		// iterate database section
@@ -233,9 +199,7 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 		pass:             "pass",
 		Addr:             "localhost:5432",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerOutputPath: make([]string, 0),
-		loggerEncoding:   rklogger.EncodingConsole,
-		loggerLevel:      LoggerLevelWarn,
+		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}
@@ -252,35 +216,12 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 			entry.User)
 	}
 
-	// Override zap logger encoding and output path if provided by user
-	// Override encoding type
-	if logger, err := rklogger.NewZapLoggerWithOverride(entry.loggerEncoding, entry.loggerOutputPath...); err != nil {
-		rkcommon.ShutdownWithError(err)
-	} else {
-		entry.Logger = logger
-	}
-
-	// convert logger level to gorm type
-	loggerLevel := logger.Warn
-	switch entry.loggerLevel {
-	case LoggerLevelSilent:
-		loggerLevel = logger.Silent
-	case LoggerLevelWarn:
-		loggerLevel = logger.Warn
-	case LoggerLevelError:
-		loggerLevel = logger.Error
-	case LoggerLevelInfo:
-		loggerLevel = logger.Info
-	default:
-		loggerLevel = logger.Warn
-	}
-
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: logger.New(NewLogger(entry.Logger), logger.Config{
+			Logger: logger.New(NewLogger(entry.zapLoggerEntry.Logger), logger.Config{
 				SlowThreshold:             200 * time.Millisecond,
-				LogLevel:                  loggerLevel,
+				LogLevel:                  logger.Warn,
 				IgnoreRecordNotFoundError: false,
 				Colorful:                  false,
 			}),
@@ -295,14 +236,25 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 
 // Bootstrap PostgresEntry
 func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
-	entry.Logger.Info("Bootstrap postgres entry",
+	// extract eventId if exists
+	fields := make([]zap.Field, 0)
+
+	if val := ctx.Value("eventId"); val != nil {
+		if id, ok := val.(string); ok {
+			fields = append(fields, zap.String("eventId", id))
+		}
+	}
+
+	fields = append(fields,
 		zap.String("entryName", entry.EntryName),
-		zap.String("postgresUser", entry.User),
-		zap.String("postgresAddr", entry.Addr))
+		zap.String("entryType", entry.EntryType))
+
+	entry.zapLoggerEntry.Logger.Info("Bootstrap postgresEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
-		entry.Logger.Error("Failed to connect to database", zap.Error(err))
+		fields = append(fields, zap.Error(err))
+		entry.zapLoggerEntry.Logger.Error("Failed to connect to database", fields...)
 		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s@%s",
 			entry.User, entry.Addr))
 	}
@@ -310,10 +262,20 @@ func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
 
 // Interrupt PostgresEntry
 func (entry *PostgresEntry) Interrupt(ctx context.Context) {
-	entry.Logger.Info("Interrupt postgres entry",
+	// extract eventId if exists
+	fields := make([]zap.Field, 0)
+
+	if val := ctx.Value("eventId"); val != nil {
+		if id, ok := val.(string); ok {
+			fields = append(fields, zap.String("eventId", id))
+		}
+	}
+
+	fields = append(fields,
 		zap.String("entryName", entry.EntryName),
-		zap.String("postgresUser", entry.User),
-		zap.String("postgresAddr", entry.Addr))
+		zap.String("entryType", entry.EntryType))
+
+	entry.zapLoggerEntry.Logger.Info("Interrupt postgres entry", fields...)
 }
 
 // GetName returns entry name
@@ -387,7 +349,7 @@ func (entry *PostgresEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.Logger.Info(fmt.Sprintf("Creating database [%s] if not exists", innerDb.name))
+			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] if not exists", innerDb.name))
 
 			// It is a little bit complex procedure here
 			// connect to database postgres and try to create DB
@@ -414,17 +376,17 @@ func (entry *PostgresEntry) connect() error {
 
 			// 3: database not found, create one
 			if len(innerDbInfo) < 1 {
-				entry.Logger.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", innerDb.name, entry.User))
+				entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", innerDb.name, entry.User))
 				res := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER %s ENCODING %s`, innerDb.name, entry.User, "UTF8"))
 				if res.Error != nil {
 					return res.Error
 				}
 			}
 
-			entry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 
 		// 2: connect
 		params = append(params, fmt.Sprintf("dbname=%s", innerDb.name))
@@ -438,7 +400,7 @@ func (entry *PostgresEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil

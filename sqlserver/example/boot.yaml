@@ -16,6 +16,4 @@ sqlServer:
 #        dryRun: true                   # Optional, default: false
 #        params: []                     # Optional, default: []
 #    logger:
-#      level: info                      # Optional, default: warn
-#      encoding: json                   # Optional, default: console
-#      outputPaths: ["sqlserver/log"]   # Optional, default: []
+#      zapLogger: zap                   # Optional, default: default logger with STDOUT

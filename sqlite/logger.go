@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/rookie-ninja/rk-entry/entry"
 	"go.uber.org/zap"
+	"strings"
 )
 
 func NewLogger(zapLogger *zap.Logger) *Logger {
@@ -25,5 +26,11 @@ type Logger struct {
 }
 
 func (l Logger) Printf(s string, i ...interface{}) {
-	l.delegate.Info(fmt.Sprintf(s, i...))
+	if strings.Contains(s, "[error]") {
+		l.delegate.Error(fmt.Sprintf(s, i...))
+	} else if strings.Contains(s, "[warn]") {
+		l.delegate.Warn(fmt.Sprintf(s, i...))
+	} else {
+		l.delegate.Info(fmt.Sprintf(s, i...))
+	}
 }

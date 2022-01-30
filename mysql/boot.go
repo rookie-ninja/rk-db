@@ -12,24 +12,12 @@ import (
 	"fmt"
 	"github.com/rookie-ninja/rk-common/common"
 	"github.com/rookie-ninja/rk-entry/entry"
-	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"strings"
 	"time"
-)
-
-const (
-	// LoggerLevelSilent set logger level of gorm as silent
-	LoggerLevelSilent = "silent"
-	// LoggerLevelError set logger level of gorm as error
-	LoggerLevelError = "error"
-	// LoggerLevelWarn set logger level of gorm as warn
-	LoggerLevelWarn = "warn"
-	// LoggerLevelInfo set logger level of gorm as info
-	LoggerLevelInfo = "info"
 )
 
 // This must be declared in order to register registration function into rk context
@@ -57,10 +45,8 @@ type BootConfig struct {
 			AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
 		} `yaml:"database" json:"database"`
 		Logger struct {
-			Encoding    string   `yaml:"encoding" json:"encoding"`
-			Level       string   `yaml:"level" json:"level"`
-			OutputPaths []string `yaml:"outputPaths" json:"outputPaths"`
-		}
+			ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
+		} `yaml:"logger" json:"logger"`
 	} `yaml:"mySql" json:"mySql"`
 }
 
@@ -71,10 +57,7 @@ type MySqlEntry struct {
 	EntryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
-	loggerEncoding   string                  `yaml:"-" json:"-"`
-	loggerOutputPath []string                `yaml:"-" json:"-"`
-	loggerLevel      string                  `yaml:"-" json:"-"`
-	Logger           *zap.Logger             `yaml:"-" json:"-"`
+	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
 	Protocol         string                  `yaml:"protocol" json:"protocol"`
 	Addr             string                  `yaml:"addr" json:"addr"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
@@ -170,27 +153,12 @@ func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option
 	}
 }
 
-// WithLoggerEncoding provide console=0, json=1.
-// json or console is supported.
-func WithLoggerEncoding(ec string) Option {
+// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
+func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
 	return func(m *MySqlEntry) {
-		m.loggerEncoding = strings.ToLower(ec)
-	}
-}
-
-// WithLoggerOutputPaths provide Logger Output Path.
-// Multiple output path could be supported including stdout.
-func WithLoggerOutputPaths(path ...string) Option {
-	return func(m *MySqlEntry) {
-		m.loggerOutputPath = append(m.loggerOutputPath, path...)
-	}
-}
-
-// WithLoggerLevel provide logger level in gorm
-// Available options are silent, error, warn, info which matches gorm.logger
-func WithLoggerLevel(level string) Option {
-	return func(m *MySqlEntry) {
-		m.loggerLevel = strings.ToLower(level)
+		if entry != nil {
+			m.zapLoggerEntry = entry
+		}
 	}
 }
 
@@ -214,9 +182,7 @@ func RegisterMySqlEntriesWithConfig(configFilePath string) map[string]rkentry.En
 			WithPass(element.Pass),
 			WithProtocol(element.Protocol),
 			WithAddr(element.Addr),
-			WithLoggerEncoding(element.Logger.Encoding),
-			WithLoggerOutputPaths(element.Logger.OutputPaths...),
-			WithLoggerLevel(element.Logger.Level),
+			WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)),
 		}
 
 		// iterate database section
@@ -243,9 +209,7 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 		Protocol:         "tcp",
 		Addr:             "localhost:3306",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerOutputPath: make([]string, 0),
-		loggerEncoding:   rklogger.EncodingConsole,
-		loggerLevel:      LoggerLevelWarn,
+		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}
@@ -262,35 +226,12 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 			entry.User)
 	}
 
-	// Override zap logger encoding and output path if provided by user
-	// Override encoding type
-	if logger, err := rklogger.NewZapLoggerWithOverride(entry.loggerEncoding, entry.loggerOutputPath...); err != nil {
-		rkcommon.ShutdownWithError(err)
-	} else {
-		entry.Logger = logger
-	}
-
-	// convert logger level to gorm type
-	loggerLevel := logger.Warn
-	switch entry.loggerLevel {
-	case LoggerLevelSilent:
-		loggerLevel = logger.Silent
-	case LoggerLevelWarn:
-		loggerLevel = logger.Warn
-	case LoggerLevelError:
-		loggerLevel = logger.Error
-	case LoggerLevelInfo:
-		loggerLevel = logger.Info
-	default:
-		loggerLevel = logger.Warn
-	}
-
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: logger.New(NewLogger(entry.Logger), logger.Config{
+			Logger: logger.New(NewLogger(entry.zapLoggerEntry.Logger), logger.Config{
 				SlowThreshold:             200 * time.Millisecond,
-				LogLevel:                  loggerLevel,
+				LogLevel:                  logger.Warn,
 				IgnoreRecordNotFoundError: false,
 				Colorful:                  false,
 			}),
@@ -305,14 +246,25 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 
 // Bootstrap MySqlEntry
 func (entry *MySqlEntry) Bootstrap(ctx context.Context) {
-	entry.Logger.Info("Bootstrap mysql entry",
+	// extract eventId if exists
+	fields := make([]zap.Field, 0)
+
+	if val := ctx.Value("eventId"); val != nil {
+		if id, ok := val.(string); ok {
+			fields = append(fields, zap.String("eventId", id))
+		}
+	}
+
+	fields = append(fields,
 		zap.String("entryName", entry.EntryName),
-		zap.String("mySqlUser", entry.User),
-		zap.String("mySqlAddr", entry.Addr))
+		zap.String("entryType", entry.EntryType))
+
+	entry.zapLoggerEntry.Logger.Info("Bootstrap mySqlEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
-		entry.Logger.Error("Failed to connect to database", zap.Error(err))
+		fields = append(fields, zap.Error(err))
+		entry.zapLoggerEntry.Logger.Error("Failed to connect to database", fields...)
 		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s(%s)",
 			entry.User, "****", entry.Protocol, entry.Addr))
 	}
@@ -320,10 +272,20 @@ func (entry *MySqlEntry) Bootstrap(ctx context.Context) {
 
 // Interrupt MySqlEntry
 func (entry *MySqlEntry) Interrupt(ctx context.Context) {
-	entry.Logger.Info("Interrupt mysql entry",
+	// extract eventId if exists
+	fields := make([]zap.Field, 0)
+
+	if val := ctx.Value("eventId"); val != nil {
+		if id, ok := val.(string); ok {
+			fields = append(fields, zap.String("eventId", id))
+		}
+	}
+
+	fields = append(fields,
 		zap.String("entryName", entry.EntryName),
-		zap.String("mySqlUser", entry.User),
-		zap.String("mySqlAddr", entry.Addr))
+		zap.String("entryType", entry.EntryType))
+
+	entry.zapLoggerEntry.Logger.Info("Interrupt mySqlEntry", fields...)
 }
 
 // GetName returns entry name
@@ -380,7 +342,7 @@ func (entry *MySqlEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.Logger.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
+			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
 
 			dsn := fmt.Sprintf("%s:%s@%s(%s)/?%s",
 				entry.User, entry.pass, entry.Protocol, entry.Addr, sqlParams)
@@ -402,10 +364,10 @@ func (entry *MySqlEntry) connect() error {
 			if db.Error != nil {
 				return db.Error
 			}
-			entry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 		dsn := fmt.Sprintf("%s:%s@%s(%s)/%s?%s",
 			entry.User, entry.pass, entry.Protocol, entry.Addr, innerDb.name, sqlParams)
 
@@ -417,7 +379,7 @@ func (entry *MySqlEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil

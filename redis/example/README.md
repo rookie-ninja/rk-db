@@ -244,9 +244,7 @@ redis:
 #
 #    # For logger
 #    logger:
-#      level: warn                    # Optional, default: warn
-#      encoding: json                 # Optional, default: console
-#      outputPaths: [ "mysql/log" ]   # Optional, default: []
+#      zapLogger: zap                   # Optional, default: default logger with STDOUT
 ```
 
 ### Usage of locale

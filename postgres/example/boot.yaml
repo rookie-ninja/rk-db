@@ -17,6 +17,4 @@ postgres:
 #        preferSimpleProtocol: false  # Optional, default: false
 #        params: []                   # Optional, default: ["sslmode=disable","TimeZone=Asia/Shanghai"]
 #    logger:
-#      level: info                    # Optional, default: warn
-#      encoding: json                 # Optional, default: console
-#      outputPaths: [ "pg/log" ]      # Optional, default: []
+#      zapLogger: zap                 # Optional, default: default logger with STDOUT

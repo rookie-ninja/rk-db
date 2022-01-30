@@ -7,7 +7,6 @@ package rkpostgres
 import (
 	"context"
 	"github.com/rookie-ninja/rk-entry/entry"
-	rklogger "github.com/rookie-ninja/rk-logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -29,10 +28,6 @@ func TestRegisterPostgresEntry(t *testing.T) {
 	assert.Equal(t, "localhost:5432", entry.Addr)
 	assert.Empty(t, entry.GormDbMap)
 	assert.Empty(t, entry.GormConfigMap)
-	assert.Equal(t, rklogger.EncodingConsole, entry.loggerEncoding)
-	assert.Equal(t, LoggerLevelWarn, entry.loggerLevel)
-	assert.Empty(t, entry.loggerOutputPath)
-	assert.NotNil(t, entry.Logger)
 
 	// remove entry
 	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
@@ -44,10 +39,7 @@ func TestRegisterPostgresEntry(t *testing.T) {
 		WithUser("ut-user"),
 		WithPass("ut-pass"),
 		WithAddr("ut-addr"),
-		WithDatabase("ut-database", true, false, false),
-		WithLoggerEncoding(rklogger.EncodingJson),
-		WithLoggerOutputPaths("ut-output"),
-		WithLoggerLevel(LoggerLevelInfo))
+		WithDatabase("ut-database", true, false, false))
 
 	assert.Equal(t, "ut-entry", entry.GetName())
 	assert.NotEmpty(t, entry.GetType())
@@ -58,10 +50,6 @@ func TestRegisterPostgresEntry(t *testing.T) {
 	assert.Equal(t, "ut-addr", entry.Addr)
 	assert.Empty(t, entry.GormDbMap)
 	assert.NotEmpty(t, entry.GormConfigMap)
-	assert.Equal(t, rklogger.EncodingJson, entry.loggerEncoding)
-	assert.Equal(t, LoggerLevelInfo, entry.loggerLevel)
-	assert.NotEmpty(t, entry.loggerOutputPath)
-	assert.NotNil(t, entry.Logger)
 
 	// remove entry
 	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
@@ -69,9 +57,7 @@ func TestRegisterPostgresEntry(t *testing.T) {
 
 func TestPostgresEntry_IsHealthy(t *testing.T) {
 	// test with dry run enabled
-	entry := RegisterPostgresEntry(
-		WithLoggerLevel(LoggerLevelInfo),
-		WithLoggerEncoding(rklogger.EncodingConsole))
+	entry := RegisterPostgresEntry()
 	entry.Bootstrap(context.TODO())
 
 	assert.True(t, entry.IsHealthy())
@@ -152,7 +138,7 @@ postgres:
 }
 
 func TestPostgresEntry_Bootstrap(t *testing.T) {
-	defer assertNotPanic(t)
+	defer assertPanic(t)
 
 	entry := RegisterPostgresEntry(
 		WithDatabase("ut-database", false, true, false))
@@ -169,5 +155,15 @@ func assertNotPanic(t *testing.T) {
 	} else {
 		// This should never be called in case of a bug
 		assert.True(t, true)
+	}
+}
+
+func assertPanic(t *testing.T) {
+	if r := recover(); r != nil {
+		// Expect panic to be called with non nil error
+		assert.True(t, true)
+	} else {
+		// This should never be called in case of a bug
+		assert.True(t, false)
 	}
 }

@@ -37,9 +37,5 @@ redis:
 #    idleTimeoutMs: 1                # Optional, default: 5 minutes
 #    idleCheckFrequencyMs: 1         # Optional, default: 1 minutes
 #
-#    # For logger
 #    logger:
-#      level: warn                    # Optional, default: warn
-#      encoding: json                 # Optional, default: console
-#      outputPaths: [ "mysql/log" ]   # Optional, default: []
-
+#      zapLogger: zap                # Optional, default: default logger with STDOUT

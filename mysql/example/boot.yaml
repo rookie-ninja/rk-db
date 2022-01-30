@@ -15,11 +15,6 @@ mySql:
       - name: user                    # Required
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
-#        params:                      # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
-#          - "charset=utf8mb4"
-#          - "parseTime=True"
-#          - "loc=Local"
+#        params: []                   # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
 #    logger:
-#      level: warn                    # Optional, default: warn
-#      encoding: json                 # Optional, default: console
-#      outputPaths: [ "mysql/log" ]   # Optional, default: []
+#      zapLogger: zap                 # Optional, default: default logger with STDOUT

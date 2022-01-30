@@ -16,6 +16,4 @@ clickHouse:
 #        dryRun: false                     # Optional, default: false
 #        params: []                        # Optional, default: []
 #    logger:
-#      level: warn                         # Optional, default: warn
-#      encoding: json                      # Optional, default: console
-#      outputPaths: [ "clickhouse/log" ]   # Optional, default: []
+#      zapLogger: zap                      # Optional, default: default logger with STDOUT
