@@ -57,6 +57,7 @@ type BootMongoE struct {
 	Name          string `yaml:"name" json:"name"`
 	Enabled       bool   `yaml:"enabled" json:"enabled"`
 	Description   string `yaml:"description" json:"description"`
+	Locale        string `yaml:"locale" json:"locale"`
 	SimpleURI     string `yaml:"simpleURI" json:"simpleURI"`
 	PingTimeoutMs int    `yaml:"pingTimeoutMs" json:"pingTimeoutMs"`
 	Database      []struct {
@@ -197,6 +198,14 @@ func RegisterMongoEntryYAML(raw []byte) map[string]rkentry.Entry {
 		element := config.Mongo[i]
 
 		if element.Enabled {
+			if len(element.Locale) < 1 {
+				element.Locale = "*::*::*::*"
+			}
+
+			if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
+				continue
+			}
+
 			clientOpt := ToClientOptions(&element)
 
 			certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.CertEntry)

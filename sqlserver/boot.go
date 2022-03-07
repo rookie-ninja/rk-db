@@ -157,6 +157,10 @@ func RegisterSqlServerEntryYAML(raw []byte) map[string]rkentry.Entry {
 	rkentry.UnmarshalBootYAML(raw, config)
 
 	for _, element := range config.SqlServer {
+		if len(element.Locale) < 1 {
+			element.Locale = "*::*::*::*"
+		}
+
 		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
 			continue
 		}

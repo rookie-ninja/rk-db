@@ -54,7 +54,8 @@ type BootRedisE struct {
 	Name                 string   `yaml:"name" json:"name"` // Required
 	Description          string   `yaml:"description" json:"description"`
 	Enabled              bool     `yaml:"enabled" json:"enabled"` // Required
-	Addrs                []string `yaml:"addrs" json:"addrs"`     // Required
+	Locale               string   `yaml:"locale" json:"locale"`
+	Addrs                []string `yaml:"addrs" json:"addrs"` // Required
 	MasterName           string   `yaml:"masterName" json:"masterName"`
 	SentinelPass         string   `yaml:"sentinelPass" json:"sentinelPass"`
 	DB                   int      `yaml:"db" json:"db"`     // Required
@@ -126,6 +127,14 @@ func RegisterRedisEntryYAML(raw []byte) map[string]rkentry.Entry {
 		element := config.Redis[i]
 
 		if element.Enabled {
+			if len(element.Locale) < 1 {
+				element.Locale = "*::*::*::*"
+			}
+
+			if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
+				continue
+			}
+
 			universalOpt := &redis.UniversalOptions{
 				Addrs:              element.Addrs,
 				DB:                 element.DB,
@@ -248,6 +257,14 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 	}
 
 	entry.Client = redis.NewUniversalClient(entry.Opts)
+
+	entry.loggerEntry.Info(fmt.Sprintf("Ping redis at %s", entry.Opts.Addrs))
+	cmd := entry.Client.Ping(context.Background())
+	if cmd.Err() != nil {
+		entry.loggerEntry.Info(fmt.Sprintf("Ping redis at %s failed", entry.Opts.Addrs))
+		rkentry.ShutdownWithError(cmd.Err())
+	}
+	entry.loggerEntry.Info(fmt.Sprintf("Ping redis at %s success", entry.Opts.Addrs))
 
 	if entry.Client != nil {
 		entry.Client.AddHook(NewRedisTracer())
