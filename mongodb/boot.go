@@ -46,19 +46,20 @@ func GetMongoDB(entryName, dbName string) *mongo.Database {
 	return nil
 }
 
-// BootConfig
+// BootMongo
 // MongoEntry boot config which reflects to YAML config
-type BootConfig struct {
-	Mongo []BootConfigMongo `yaml:"mongo" json:"mongo"`
+type BootMongo struct {
+	Mongo []BootMongoE `yaml:"mongo" json:"mongo"`
 }
 
-// BootConfigMongo sub struct for BootConfig
-type BootConfigMongo struct {
-	Name        string `yaml:"name" json:"name"`
-	Enabled     bool   `yaml:"enabled" json:"enabled"`
-	Description string `yaml:"description" json:"description"`
-	SimpleURI   string `yaml:"simpleURI" json:"simpleURI"`
-	Database    []struct {
+// BootMongoE sub struct for BootConfig
+type BootMongoE struct {
+	Name          string `yaml:"name" json:"name"`
+	Enabled       bool   `yaml:"enabled" json:"enabled"`
+	Description   string `yaml:"description" json:"description"`
+	SimpleURI     string `yaml:"simpleURI" json:"simpleURI"`
+	PingTimeoutMs int    `yaml:"pingTimeoutMs" json:"pingTimeoutMs"`
+	Database      []struct {
 		Name string `yaml:"name" json:"name"`
 	}
 	LoggerEntry string  `yaml:"loggerEntry" json:"loggerEntry"`
@@ -101,7 +102,7 @@ type BootConfigMongo struct {
 }
 
 // ToClientOptions convert BootConfigMongo to options.ClientOptions
-func ToClientOptions(config *BootConfigMongo) *mongoOpt.ClientOptions {
+func ToClientOptions(config *BootMongoE) *mongoOpt.ClientOptions {
 	if config == nil {
 		return &mongoOpt.ClientOptions{}
 	}
@@ -189,7 +190,7 @@ func RegisterMongoEntryYAML(raw []byte) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
 	// 1: unmarshal user provided config into boot config struct
-	config := &BootConfig{}
+	config := &BootMongo{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
 	for i := range config.Mongo {
@@ -205,6 +206,7 @@ func RegisterMongoEntryYAML(raw []byte) map[string]rkentry.Entry {
 				WithDescription(element.Description),
 				WithClientOptions(clientOpt),
 				WithCertEntry(certEntry),
+				WithPingTimeoutMs(element.PingTimeoutMs),
 				WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
 			}
 
@@ -231,6 +233,7 @@ func RegisterMongoEntry(opts ...Option) *MongoEntry {
 		loggerEntry:      rkentry.NewLoggerEntryStdout(),
 		mongoDbMap:       make(map[string]*mongo.Database),
 		mongoDbOpts:      make(map[string][]*mongoOpt.DatabaseOptions),
+		pingTimeoutMs:    3 * time.Second,
 		Opts:             mongoOpt.Client().ApplyURI("mongodb://localhost:27017"),
 	}
 
@@ -268,6 +271,7 @@ type MongoEntry struct {
 	mongoDbOpts      map[string][]*mongoOpt.DatabaseOptions `yaml:"-" json:"-"`
 	certEntry        *rkentry.CertEntry                     `yaml:"-" json:"-"`
 	loggerEntry      *rkentry.LoggerEntry                   `yaml:"-" json:"-"`
+	pingTimeoutMs    time.Duration                          `yaml:"-" json:"-"`
 }
 
 // Bootstrap MongoEntry
@@ -296,6 +300,13 @@ func (entry *MongoEntry) Bootstrap(ctx context.Context) {
 	} else {
 		entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v success", entry.Opts.Hosts))
 		entry.Client = client
+	}
+
+	// try ping
+	pingCtx, _ := context.WithTimeout(context.Background(), entry.pingTimeoutMs)
+	if err := entry.Client.Ping(pingCtx, nil); err != nil {
+		entry.loggerEntry.Error(fmt.Sprintf("Ping mongoDB at %v failed", entry.Opts.Hosts))
+		rkentry.ShutdownWithError(err)
 	}
 
 	// create database
@@ -421,6 +432,14 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *MongoEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		}
+	}
+}
+
+func WithPingTimeoutMs(tout int) Option {
+	return func(entry *MongoEntry) {
+		if tout > 0 {
+			entry.pingTimeoutMs = time.Duration(tout) * time.Millisecond
 		}
 	}
 }

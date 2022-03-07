@@ -9,6 +9,7 @@ mongo:
     simpleURI: "mongodb://localhost:27017"      # Required
     database:
       - name: "users"                           # Required
+#    pingTimeoutMs: 3000                         # Optional
 #    description: "description"
 #    certEntry: ""
 #    loggerEntry: ""

@@ -61,10 +61,10 @@ func TestToClientOptions(t *testing.T) {
 	assert.NotNil(t, ToClientOptions(nil))
 
 	// with nil element
-	assert.NotNil(t, ToClientOptions(&BootConfigMongo{}))
+	assert.NotNil(t, ToClientOptions(&BootMongoE{}))
 
 	// happy case
-	config := &BootConfigMongo{}
+	config := &BootMongoE{}
 	assert.Nil(t, yaml.Unmarshal([]byte(yamlStr), config))
 	opts := ToClientOptions(config)
 	assert.NotNil(t, opts)
@@ -136,7 +136,7 @@ mongo:
 }
 
 func TestMongoEntry_Bootstrap(t *testing.T) {
-	defer assertNotPanic(t)
+	defer assertPanic(t)
 
 	entry := RegisterMongoEntry(
 		WithDatabase("database"))
@@ -148,7 +148,7 @@ func TestMongoEntry_Bootstrap(t *testing.T) {
 }
 
 func TestMongoEntry_Interrupt(t *testing.T) {
-	defer assertNotPanic(t)
+	defer assertPanic(t)
 
 	// without bootstrap
 	entry := RegisterMongoEntry(
