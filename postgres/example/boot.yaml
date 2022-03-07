@@ -16,5 +16,4 @@ postgres:
 #        dryRun: true                 # Optional, default: false
 #        preferSimpleProtocol: false  # Optional, default: false
 #        params: []                   # Optional, default: ["sslmode=disable","TimeZone=Asia/Shanghai"]
-#    logger:
-#      zapLogger: zap                 # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                  # Optional, default: default logger with STDOUT

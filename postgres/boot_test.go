@@ -9,9 +9,6 @@ import (
 	"github.com/rookie-ninja/rk-entry/entry"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"io/ioutil"
-	"os"
-	"path"
 	"testing"
 )
 
@@ -127,10 +124,7 @@ postgres:
         params: []
 `
 
-	tempDir := path.Join(t.TempDir(), "boot.yaml")
-	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(bootConfigStr), os.ModePerm))
-
-	entries := RegisterPostgresEntriesWithConfig(tempDir)
+	entries := RegisterPostgresEntryYAML([]byte(bootConfigStr))
 
 	assert.NotEmpty(t, entries)
 
@@ -141,6 +135,7 @@ func TestPostgresEntry_Bootstrap(t *testing.T) {
 	defer assertPanic(t)
 
 	entry := RegisterPostgresEntry(
+		WithAddr("fake-addr"),
 		WithDatabase("ut-database", false, true, false))
 	entry.Bootstrap(context.TODO())
 

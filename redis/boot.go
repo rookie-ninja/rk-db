@@ -12,8 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"github.com/rookie-ninja/rk-common/common"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.uber.org/zap"
 	"strings"
 	"time"
@@ -22,18 +21,20 @@ import (
 // This must be declared in order to register registration function into rk context
 // otherwise, rk-boot won't able to bootstrap echo entry automatically from boot config file
 func init() {
-	rkentry.RegisterEntryRegFunc(RegisterRedisEntryFromConfig)
+	rkentry.RegisterEntryRegFunc(RegisterRedisEntryYAML)
 }
 
 const (
 	ha      = "HA"
 	cluster = "Cluster"
 	single  = "Single"
+
+	RedisEntryType = "RedisEntry"
 )
 
 // GetRedisEntry returns RedisEntry
 func GetRedisEntry(entryName string) *RedisEntry {
-	if v := rkentry.GlobalAppCtx.GetEntry(entryName); v != nil {
+	if v := rkentry.GlobalAppCtx.GetEntry(RedisEntryType, entryName); v != nil {
 		if res, ok := v.(*RedisEntry); ok {
 			return res
 		}
@@ -42,14 +43,14 @@ func GetRedisEntry(entryName string) *RedisEntry {
 	return nil
 }
 
-// BootConfig
+// BootRedis
 // Redis entry boot config which reflects to YAML config
-type BootConfig struct {
-	Redis []BootConfigRedis `yaml:"redis" json:"redis"`
+type BootRedis struct {
+	Redis []BootRedisE `yaml:"redis" json:"redis"`
 }
 
-// BootConfigRedis sub struct for BootConfig
-type BootConfigRedis struct {
+// BootRedisE sub struct for BootRedis
+type BootRedisE struct {
 	Name                 string   `yaml:"name" json:"name"` // Required
 	Description          string   `yaml:"description" json:"description"`
 	Enabled              bool     `yaml:"enabled" json:"enabled"` // Required
@@ -76,14 +77,12 @@ type BootConfigRedis struct {
 	ReadOnly             bool     `yaml:"readOnly" json:"readOnly"`
 	RouteByLatency       bool     `yaml:"routeByLatency" json:"routeByLatency"`
 	RouteRandomly        bool     `yaml:"routeRandomly" json:"routeRandomly"`
-	Logger               struct {
-		ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
-	} `yaml:"logger" json:"logger"`
-	CertEntry string `yaml:"certEntry" json:"certEntry"`
+	LoggerEntry          string   `yaml:"loggerEntry" json:"loggerEntry"`
+	CertEntry            string   `yaml:"certEntry" json:"certEntry"`
 }
 
 // ToRedisUniversalOptions convert BootConfigRedis to redis.UniversalOptions
-func ToRedisUniversalOptions(config *BootConfigRedis) *redis.UniversalOptions {
+func ToRedisUniversalOptions(config *BootRedisE) *redis.UniversalOptions {
 	if config.Enabled {
 		return &redis.UniversalOptions{
 			Addrs:              config.Addrs,
@@ -115,13 +114,13 @@ func ToRedisUniversalOptions(config *BootConfigRedis) *redis.UniversalOptions {
 	}
 }
 
-// RegisterRedisEntryFromConfig register RedisEntry based on config file into rkentry.GlobalAppCtx
-func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entry {
+// RegisterRedisEntryYAML register RedisEntry based on config file into rkentry.GlobalAppCtx
+func RegisterRedisEntryYAML(raw []byte) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
 	// 1: unmarshal user provided config into boot config struct
-	config := &BootConfig{}
-	rkcommon.UnmarshalBootConfig(configFilePath, config)
+	config := &BootRedis{}
+	rkentry.UnmarshalBootYAML(raw, config)
 
 	for i := range config.Redis {
 		element := config.Redis[i]
@@ -160,7 +159,7 @@ func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entr
 				WithDescription(element.Description),
 				WithUniversalOption(universalOpt),
 				WithCertEntry(certEntry),
-				WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)))
+				WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)))
 
 			res[entry.GetName()] = entry
 		}
@@ -172,10 +171,10 @@ func RegisterRedisEntryFromConfig(configFilePath string) map[string]rkentry.Entr
 // RegisterRedisEntry will register Entry into GlobalAppCtx
 func RegisterRedisEntry(opts ...Option) *RedisEntry {
 	entry := &RedisEntry{
-		EntryName:        "Redis",
-		EntryType:        "Redis",
-		EntryDescription: "Redis entry for go-redis client",
-		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
+		entryName:        "Redis",
+		entryType:        RedisEntryType,
+		entryDescription: "Redis entry for go-redis client",
+		loggerEntry:      rkentry.LoggerEntryStdout,
 		Opts: &redis.UniversalOptions{
 			Addrs: []string{"localhost:6379"},
 		},
@@ -189,17 +188,17 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 		entry.Opts.Addrs = append(entry.Opts.Addrs, "localhost:6379")
 	}
 
-	if len(entry.EntryName) < 1 {
-		entry.EntryName = "redis-" + strings.Join(entry.Opts.Addrs, "-")
+	if len(entry.entryName) < 1 {
+		entry.entryName = "redis-" + strings.Join(entry.Opts.Addrs, "-")
 	}
 
-	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s",
-			entry.EntryType,
-			entry.EntryName)
+	if len(entry.entryDescription) < 1 {
+		entry.entryDescription = fmt.Sprintf("%s entry with name of %s",
+			entry.entryType,
+			entry.entryName)
 	}
 
-	redis.SetLogger(NewLogger(entry.zapLoggerEntry.Logger))
+	redis.SetLogger(NewLogger(entry.loggerEntry.Logger))
 
 	rkentry.GlobalAppCtx.AddEntry(entry)
 
@@ -208,13 +207,13 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 
 // RedisEntry will init redis.Client with provided arguments
 type RedisEntry struct {
-	EntryName        string                  `yaml:"entryName" yaml:"entryName"`
-	EntryType        string                  `yaml:"entryType" yaml:"entryType"`
-	EntryDescription string                  `yaml:"-" json:"-"`
+	entryName        string                  `yaml:"entryName" yaml:"entryName"`
+	entryType        string                  `yaml:"entryType" yaml:"entryType"`
+	entryDescription string                  `yaml:"-" json:"-"`
 	ClientType       string                  `yaml:"clientType" json:"clientType"`
 	Opts             *redis.UniversalOptions `yaml:"-" json:"-"`
 	certEntry        *rkentry.CertEntry      `yaml:"-" json:"-"`
-	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
+	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
 	Client           redis.UniversalClient   `yaml:"-" json:"-"`
 }
 
@@ -238,19 +237,14 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType),
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType),
 		zap.String("clientType", entry.ClientType))
 
-	entry.zapLoggerEntry.Logger.Info("Bootstrap redisEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap redisEntry", fields...)
 
 	if entry.IsTlsEnabled() {
-		if cert, err := tls.X509KeyPair(entry.certEntry.Store.ServerCert, entry.certEntry.Store.ServerKey); err != nil {
-			entry.zapLoggerEntry.Logger.Error("Error occurs while parsing TLS.")
-			rkcommon.ShutdownWithError(err)
-		} else {
-			entry.Opts.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
-		}
+		entry.Opts.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*entry.certEntry.Certificate}}
 	}
 
 	entry.Client = redis.NewUniversalClient(entry.Opts)
@@ -272,26 +266,26 @@ func (entry *RedisEntry) Interrupt(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType),
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType),
 		zap.String("clientType", entry.ClientType))
 
-	entry.zapLoggerEntry.Logger.Info("Interrupt redisEntry", fields...)
+	entry.loggerEntry.Info("Interrupt redisEntry", fields...)
 }
 
 // GetName returns entry name
 func (entry *RedisEntry) GetName() string {
-	return entry.EntryName
+	return entry.entryName
 }
 
 // GetType returns entry type
 func (entry *RedisEntry) GetType() string {
-	return entry.EntryType
+	return entry.entryType
 }
 
 // GetDescription returns entry description
 func (entry *RedisEntry) GetDescription() string {
-	return entry.EntryDescription
+	return entry.entryDescription
 }
 
 // String returns json marshalled string
@@ -306,7 +300,7 @@ func (entry *RedisEntry) String() string {
 
 // IsTlsEnabled checks TLS
 func (entry *RedisEntry) IsTlsEnabled() bool {
-	return entry.certEntry != nil && entry.certEntry.Store != nil
+	return entry.certEntry != nil && entry.certEntry.Certificate != nil
 }
 
 // GetClient convert redis.UniversalClient to proper redis.Client
@@ -339,14 +333,14 @@ type Option func(e *RedisEntry)
 // WithName provide name.
 func WithName(name string) Option {
 	return func(entry *RedisEntry) {
-		entry.EntryName = name
+		entry.entryName = name
 	}
 }
 
 // WithDescription provide name.
 func WithDescription(description string) Option {
 	return func(entry *RedisEntry) {
-		entry.EntryDescription = description
+		entry.entryDescription = description
 	}
 }
 
@@ -366,11 +360,11 @@ func WithUniversalOption(opt *redis.UniversalOptions) Option {
 	}
 }
 
-// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
-func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
+// WithLoggerEntry provide rkentry.LoggerEntry entry name
+func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *RedisEntry) {
 		if entry != nil {
-			m.zapLoggerEntry = entry
+			m.loggerEntry = entry
 		}
 	}
 }

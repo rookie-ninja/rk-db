@@ -10,8 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rookie-ninja/rk-common/common"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
@@ -27,17 +26,17 @@ BEGIN
   CREATE DATABASE [%s];
 END;
 `
+	SqlServerEntryType = "SqlServerEntry"
 )
 
 // This must be declared in order to register registration function into rk context
 // otherwise, rk-boot won't able to bootstrap echo entry automatically from boot config file
 func init() {
-	rkentry.RegisterEntryRegFunc(RegisterSqlServerEntriesWithConfig)
+	rkentry.RegisterEntryRegFunc(RegisterSqlServerEntryYAML)
 }
 
-// BootConfig
-// SqlServer entry boot config which reflects to YAML config
-type BootConfig struct {
+// BootSqlServer entry boot config which reflects to YAML config
+type BootSqlServer struct {
 	SqlServer []struct {
 		Enabled     bool   `yaml:"enabled" json:"enabled"`
 		Name        string `yaml:"name" json:"name"`
@@ -52,20 +51,18 @@ type BootConfig struct {
 			DryRun     bool     `yaml:"dryRun" json:"dryRun"`
 			AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
 		} `yaml:"database" json:"database"`
-		Logger struct {
-			ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
-		} `yaml:"logger" json:"logger"`
-	} `yaml:"sqlServer" json:"sqlServer"`
+		LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
+	} `yaml:"sqlserver" json:"sqlserver"`
 }
 
 // SqlServerEntry will init gorm.DB or SqlMock with provided arguments
 type SqlServerEntry struct {
-	EntryName        string                  `yaml:"entryName" yaml:"entryName"`
-	EntryType        string                  `yaml:"entryType" yaml:"entryType"`
-	EntryDescription string                  `yaml:"-" json:"-"`
+	entryName        string                  `yaml:"entryName" yaml:"entryName"`
+	entryType        string                  `yaml:"entryType" yaml:"entryType"`
+	entryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
-	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
+	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
 	Addr             string                  `yaml:"addr" json:"addr"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
 	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
@@ -79,20 +76,19 @@ type databaseInner struct {
 	params     []string
 }
 
-// DataStore will be extended in future.
 type Option func(*SqlServerEntry)
 
 // WithName provide name.
 func WithName(name string) Option {
 	return func(entry *SqlServerEntry) {
-		entry.EntryName = name
+		entry.entryName = name
 	}
 }
 
 // WithDescription provide name.
 func WithDescription(description string) Option {
 	return func(entry *SqlServerEntry) {
-		entry.EntryDescription = description
+		entry.entryDescription = description
 	}
 }
 
@@ -143,25 +139,25 @@ func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option
 	}
 }
 
-// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
-func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
+// WithLoggerEntry provide rkentry.LoggerEntry entry name
+func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *SqlServerEntry) {
 		if entry != nil {
-			m.zapLoggerEntry = entry
+			m.loggerEntry = entry
 		}
 	}
 }
 
-// RegisterSqlServerEntriesWithConfig register SqlServerEntry based on config file into rkentry.GlobalAppCtx
-func RegisterSqlServerEntriesWithConfig(configFilePath string) map[string]rkentry.Entry {
+// RegisterSqlServerEntryYAML register SqlServerEntry based on config file into rkentry.GlobalAppCtx
+func RegisterSqlServerEntryYAML(raw []byte) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
 	// 1: unmarshal user provided config into boot config struct
-	config := &BootConfig{}
-	rkcommon.UnmarshalBootConfig(configFilePath, config)
+	config := &BootSqlServer{}
+	rkentry.UnmarshalBootYAML(raw, config)
 
 	for _, element := range config.SqlServer {
-		if len(element.Name) < 1 || !rkcommon.MatchLocaleWithEnv(element.Locale) {
+		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
 			continue
 		}
 
@@ -171,7 +167,7 @@ func RegisterSqlServerEntriesWithConfig(configFilePath string) map[string]rkentr
 			WithUser(element.User),
 			WithPass(element.Pass),
 			WithAddr(element.Addr),
-			WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)),
+			WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
 		}
 
 		// iterate database section
@@ -190,14 +186,14 @@ func RegisterSqlServerEntriesWithConfig(configFilePath string) map[string]rkentr
 // RegisterSqlServerEntry will register Entry into GlobalAppCtx
 func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 	entry := &SqlServerEntry{
-		EntryName:        "SqlServer",
-		EntryType:        "SqlServer",
-		EntryDescription: "SqlServer entry for gorm.DB",
+		entryName:        "SqlServer",
+		entryType:        SqlServerEntryType,
+		entryDescription: "SqlServer entry for gorm.DB",
 		User:             "sa",
 		pass:             "pass",
 		Addr:             "localhost:1433",
 		innerDbList:      make([]*databaseInner, 0),
-		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
+		loggerEntry:      rkentry.NewLoggerEntryStdout(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}
@@ -206,10 +202,10 @@ func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 		opts[i](entry)
 	}
 
-	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
-			entry.EntryType,
-			entry.EntryName,
+	if len(entry.entryDescription) < 1 {
+		entry.entryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
+			entry.entryType,
+			entry.entryName,
 			entry.Addr,
 			entry.User)
 	}
@@ -217,8 +213,8 @@ func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: logger.New(NewLogger(entry.zapLoggerEntry.Logger), logger.Config{
-				SlowThreshold:             200 * time.Millisecond,
+			Logger: logger.New(NewLogger(entry.loggerEntry.Logger), logger.Config{
+				SlowThreshold:             5000 * time.Millisecond,
 				LogLevel:                  logger.Warn,
 				IgnoreRecordNotFoundError: false,
 				Colorful:                  false,
@@ -244,16 +240,16 @@ func (entry *SqlServerEntry) Bootstrap(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.zapLoggerEntry.Logger.Info("Bootstrap sqlServerEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap sqlServerEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
 		fields = append(fields, zap.Error(err))
-		entry.zapLoggerEntry.Logger.Error("Failed to connect to database", fields...)
-		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s",
+		entry.loggerEntry.Error("Failed to connect to database", fields...)
+		rkentry.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s",
 			entry.User, "****", entry.Addr))
 	}
 }
@@ -270,25 +266,25 @@ func (entry *SqlServerEntry) Interrupt(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.zapLoggerEntry.Logger.Info("Interrupt sqlServerEntry", fields...)
+	entry.loggerEntry.Info("Interrupt sqlServerEntry", fields...)
 }
 
 // GetName returns entry name
 func (entry *SqlServerEntry) GetName() string {
-	return entry.EntryName
+	return entry.entryName
 }
 
 // GetType returns entry type
 func (entry *SqlServerEntry) GetType() string {
-	return entry.EntryType
+	return entry.entryType
 }
 
 // GetDescription returns entry description
 func (entry *SqlServerEntry) GetDescription() string {
-	return entry.EntryDescription
+	return entry.entryDescription
 }
 
 // String returns json marshalled string
@@ -328,7 +324,7 @@ func (entry *SqlServerEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
 
 			dsn := fmt.Sprintf("sqlserver://%s:%s@%s",
 				entry.User, entry.pass, entry.Addr)
@@ -348,10 +344,10 @@ func (entry *SqlServerEntry) connect() error {
 				return db.Error
 			}
 
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 		params := []string{fmt.Sprintf("database=%s", innerDb.name)}
 		params = append(params, innerDb.params...)
 
@@ -366,7 +362,7 @@ func (entry *SqlServerEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil
@@ -392,7 +388,7 @@ func copyZapLoggerConfig(src *zap.Config) *zap.Config {
 
 // GetSqlServerEntry returns SqlServerEntry instance
 func GetSqlServerEntry(name string) *SqlServerEntry {
-	if raw := rkentry.GlobalAppCtx.GetEntry(name); raw != nil {
+	if raw := rkentry.GlobalAppCtx.GetEntry(SqlServerEntryType, name); raw != nil {
 		if entry, ok := raw.(*SqlServerEntry); ok {
 			return entry
 		}

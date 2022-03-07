@@ -11,8 +11,7 @@ mongo:
       - name: "users"                           # Required
 #    description: "description"
 #    certEntry: ""
-#    logger:
-#      zapLogger: zap
+#    loggerEntry: ""
 #    # Belongs to mongoDB client options
 #    # Please refer to https://github.com/mongodb/mongo-go-driver/blob/master/mongo/options/clientoptions.go
 #    appName: ""

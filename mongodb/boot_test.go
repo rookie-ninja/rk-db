@@ -113,16 +113,13 @@ mongo:
     simpleURI: ""
     database:
       - name: "database"
-    logger:
-      encoding: json
-      outputPaths: ["logs/ut.log"]
 %s
 `
 
 	tempDir := path.Join(t.TempDir(), "boot.yaml")
 	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(fmt.Sprintf(fullYamlStr, yamlStr)), os.ModePerm))
 
-	entries := RegisterMongoEntriesFromConfig(tempDir)
+	entries := RegisterMongoEntryYAML([]byte(fmt.Sprintf(fullYamlStr, yamlStr)))
 
 	assert.Len(t, entries, 1)
 

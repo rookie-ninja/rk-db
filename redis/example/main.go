@@ -8,9 +8,9 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"github.com/rookie-ninja/rk-boot"
-	"github.com/rookie-ninja/rk-boot/gin"
+	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/redis"
+	"github.com/rookie-ninja/rk-gin/v2/boot"
 	"net/http"
 	"time"
 )
@@ -27,7 +27,7 @@ func main() {
 	redisClient, _ = redisEntry.GetClient()
 
 	// Register APIs
-	ginEntry := rkbootgin.GetGinEntry("server")
+	ginEntry := rkgin.GetGinEntry("server")
 	ginEntry.Router.GET("/v1/get", Get)
 	ginEntry.Router.POST("/v1/set", Set)
 

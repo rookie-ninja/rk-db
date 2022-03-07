@@ -15,5 +15,4 @@ sqlServer:
         autoCreate: true                # Optional, default: false
 #        dryRun: true                   # Optional, default: false
 #        params: []                     # Optional, default: []
-#    logger:
-#      zapLogger: zap                   # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                    # Optional, default: default logger with STDOUT

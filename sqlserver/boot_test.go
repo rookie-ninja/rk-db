@@ -6,7 +6,7 @@ package rksqlserver
 
 import (
 	"context"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -30,7 +30,7 @@ func TestRegisterSqlServerEntry(t *testing.T) {
 	assert.Empty(t, entry.GormConfigMap)
 
 	// remove entry
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 
 	// with options
 	entry = RegisterSqlServerEntry(
@@ -52,7 +52,7 @@ func TestRegisterSqlServerEntry(t *testing.T) {
 	assert.NotEmpty(t, entry.GormConfigMap)
 
 	// remove entry
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 }
 
 func TestSqlServerEntry_IsHealthy(t *testing.T) {
@@ -62,7 +62,7 @@ func TestSqlServerEntry_IsHealthy(t *testing.T) {
 
 	assert.True(t, entry.IsHealthy())
 
-	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	defer rkentry.GlobalAppCtx.RemoveEntry(entry)
 	defer entry.Interrupt(context.TODO())
 }
 
@@ -101,24 +101,21 @@ func TestGetSqlServerEntry(t *testing.T) {
 	assert.Nil(t, GetSqlServerEntry(rkentry.GlobalAppCtx.GetAppInfoEntry().GetName()))
 
 	entry := RegisterSqlServerEntry()
-	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	defer rkentry.GlobalAppCtx.RemoveEntry(entry)
 	// happy case
 	assert.Equal(t, entry, GetSqlServerEntry(entry.GetName()))
 }
 
 func TestRegisterSqlServerEntriesWithConfig(t *testing.T) {
 	bootConfigStr := `
-sqlServer:
+sqlserver:
   - name: user-db
     enabled: true
     locale: "*::*::*::*"
     addr: "localhost:1433"
     user: root
     pass: pass
-    logger:
-      level: warn
-      encoding: json
-      outputPaths: [ "sqlserver/log" ]
+    loggerEntry: ""
     database:
       - name: user
         autoCreate: true
@@ -129,11 +126,11 @@ sqlServer:
 	tempDir := path.Join(t.TempDir(), "boot.yaml")
 	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(bootConfigStr), os.ModePerm))
 
-	entries := RegisterSqlServerEntriesWithConfig(tempDir)
+	entries := RegisterSqlServerEntryYAML([]byte(bootConfigStr))
 
 	assert.NotEmpty(t, entries)
 
-	rkentry.GlobalAppCtx.RemoveEntry("user-db")
+	rkentry.GlobalAppCtx.RemoveEntry(entries["user-db"])
 }
 
 func TestSqlServerEntry_Bootstrap(t *testing.T) {

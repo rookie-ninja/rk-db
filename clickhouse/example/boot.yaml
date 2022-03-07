@@ -3,7 +3,7 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
-clickHouse:
+clickhouse:
   - name: user-db                          # Required
     enabled: true                          # Required
     locale: "*::*::*::*"                   # Required
@@ -15,5 +15,4 @@ clickHouse:
         autoCreate: true                   # Optional, default: false
 #        dryRun: false                     # Optional, default: false
 #        params: []                        # Optional, default: []
-#    logger:
-#      zapLogger: zap                      # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                       # Optional, default: default logger with STDOUT

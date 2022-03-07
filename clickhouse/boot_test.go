@@ -6,12 +6,9 @@ package rkclickhouse
 
 import (
 	"context"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"io/ioutil"
-	"os"
-	"path"
 	"testing"
 )
 
@@ -30,7 +27,7 @@ func TestRegisterClickHouseEntry(t *testing.T) {
 	assert.Empty(t, entry.GormConfigMap)
 
 	// remove entry
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 
 	// with options
 	entry = RegisterClickHouseEntry(
@@ -52,7 +49,7 @@ func TestRegisterClickHouseEntry(t *testing.T) {
 	assert.NotEmpty(t, entry.GormConfigMap)
 
 	// remove entry
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 }
 
 func TestClickHouseEntry_IsHealthy(t *testing.T) {
@@ -62,7 +59,7 @@ func TestClickHouseEntry_IsHealthy(t *testing.T) {
 
 	assert.True(t, entry.IsHealthy())
 
-	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	defer rkentry.GlobalAppCtx.RemoveEntry(entry)
 	defer entry.Interrupt(context.TODO())
 }
 
@@ -101,7 +98,7 @@ func TestGetClickHouseEntry(t *testing.T) {
 	assert.Nil(t, GetClickHouseEntry(rkentry.GlobalAppCtx.GetAppInfoEntry().GetName()))
 
 	entry := RegisterClickHouseEntry()
-	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	defer rkentry.GlobalAppCtx.RemoveEntry(entry)
 	// happy case
 	assert.Equal(t, entry, GetClickHouseEntry(entry.GetName()))
 }
@@ -126,14 +123,11 @@ clickHouse:
         params: []
 `
 
-	tempDir := path.Join(t.TempDir(), "boot.yaml")
-	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(bootConfigStr), os.ModePerm))
-
-	entries := RegisterClickHouseEntriesWithConfig(tempDir)
+	entries := RegisterClickHouseEntryYAML([]byte(bootConfigStr))
 
 	assert.NotEmpty(t, entries)
 
-	rkentry.GlobalAppCtx.RemoveEntry("user-db")
+	rkentry.GlobalAppCtx.RemoveEntry(entries["user-db"])
 }
 
 func TestClickHouseEntry_Bootstrap(t *testing.T) {

@@ -10,8 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rookie-ninja/rk-common/common"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.uber.org/zap"
 	"gorm.io/driver/clickhouse"
 	"gorm.io/gorm"
@@ -20,10 +19,12 @@ import (
 	"time"
 )
 
+const ClickHouseEntryType = "ClickHouseEntry"
+
 // This must be declared in order to register registration function into rk context
 // otherwise, rk-boot won't able to bootstrap echo entry automatically from boot config file
 func init() {
-	rkentry.RegisterEntryRegFunc(RegisterClickHouseEntriesWithConfig)
+	rkentry.RegisterEntryRegFunc(RegisterClickHouseEntryYAML)
 }
 
 // BootConfig
@@ -43,21 +44,19 @@ type BootConfig struct {
 			DryRun     bool     `yaml:"dryRun" json:"dryRun"`
 			AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
 		} `yaml:"database" json:"database"`
-		Logger struct {
-			ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
-		} `yaml:"logger" json:"logger"`
-	} `yaml:"clickHouse" json:"clickHouse"`
+		LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
+	} `yaml:"clickhouse" json:"clickhouse"`
 }
 
 // ClickHouseEntry will init gorm.DB or SqlMock with provided arguments
 type ClickHouseEntry struct {
-	EntryName        string                  `yaml:"entryName" yaml:"entryName"`
-	EntryType        string                  `yaml:"entryType" yaml:"entryType"`
-	EntryDescription string                  `yaml:"-" json:"-"`
-	User             string                  `yaml:"user" json:"user"`
+	entryName        string                  `yaml:"-" yaml:"-"`
+	entryType        string                  `yaml:"-" yaml:"-"`
+	entryDescription string                  `yaml:"-" json:"-"`
+	User             string                  `yaml:"-" json:"-"`
 	pass             string                  `yaml:"-" json:"-"`
-	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
-	Addr             string                  `yaml:"addr" json:"addr"`
+	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
+	Addr             string                  `yaml:"-" json:"-"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
 	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
 	GormConfigMap    map[string]*gorm.Config `yaml:"-" json:"-"`
@@ -70,20 +69,19 @@ type databaseInner struct {
 	params     []string
 }
 
-// DataStore will be extended in future.
 type Option func(*ClickHouseEntry)
 
 // WithName provide name.
 func WithName(name string) Option {
 	return func(entry *ClickHouseEntry) {
-		entry.EntryName = name
+		entry.entryName = name
 	}
 }
 
 // WithDescription provide name.
 func WithDescription(description string) Option {
 	return func(entry *ClickHouseEntry) {
-		entry.EntryDescription = description
+		entry.entryDescription = description
 	}
 }
 
@@ -135,25 +133,25 @@ func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option
 	}
 }
 
-// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
-func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
+// WithLoggerEntry provide rkentry.ZapLoggerEntry entry name
+func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *ClickHouseEntry) {
 		if entry != nil {
-			m.zapLoggerEntry = entry
+			m.loggerEntry = entry
 		}
 	}
 }
 
-// RegisterClickHouseEntriesWithConfig register ClickHouseEntry based on config file into rkentry.GlobalAppCtx
-func RegisterClickHouseEntriesWithConfig(configFilePath string) map[string]rkentry.Entry {
+// RegisterClickHouseEntryYAML register ClickHouseEntry based on config file into rkentry.GlobalAppCtx
+func RegisterClickHouseEntryYAML(raw []byte) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
 	// 1: unmarshal user provided config into boot config struct
 	config := &BootConfig{}
-	rkcommon.UnmarshalBootConfig(configFilePath, config)
+	rkentry.UnmarshalBootYAML(raw, config)
 
 	for _, element := range config.ClickHouse {
-		if len(element.Name) < 1 || !rkcommon.MatchLocaleWithEnv(element.Locale) {
+		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
 			continue
 		}
 
@@ -163,7 +161,7 @@ func RegisterClickHouseEntriesWithConfig(configFilePath string) map[string]rkent
 			WithUser(element.User),
 			WithPass(element.Pass),
 			WithAddr(element.Addr),
-			WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)),
+			WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
 		}
 
 		// iterate database section
@@ -182,14 +180,14 @@ func RegisterClickHouseEntriesWithConfig(configFilePath string) map[string]rkent
 // RegisterClickHouseEntry will register Entry into GlobalAppCtx
 func RegisterClickHouseEntry(opts ...Option) *ClickHouseEntry {
 	entry := &ClickHouseEntry{
-		EntryName:        "ClickHouse",
-		EntryType:        "ClickHouse",
-		EntryDescription: "ClickHouse entry for gorm.DB",
+		entryName:        "ClickHouse",
+		entryType:        ClickHouseEntryType,
+		entryDescription: "ClickHouse entry for gorm.DB",
 		User:             "default",
 		pass:             "",
 		Addr:             "localhost:9000",
 		innerDbList:      make([]*databaseInner, 0),
-		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
+		loggerEntry:      rkentry.LoggerEntryStdout,
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}
@@ -198,10 +196,10 @@ func RegisterClickHouseEntry(opts ...Option) *ClickHouseEntry {
 		opts[i](entry)
 	}
 
-	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
-			entry.EntryType,
-			entry.EntryName,
+	if len(entry.entryDescription) < 1 {
+		entry.entryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
+			entry.entryType,
+			entry.entryName,
 			entry.Addr,
 			entry.User)
 	}
@@ -209,8 +207,8 @@ func RegisterClickHouseEntry(opts ...Option) *ClickHouseEntry {
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: logger.New(NewLogger(entry.zapLoggerEntry.Logger), logger.Config{
-				SlowThreshold:             200 * time.Millisecond,
+			Logger: logger.New(NewLogger(entry.loggerEntry.Logger), logger.Config{
+				SlowThreshold:             5 * time.Second,
 				LogLevel:                  logger.Warn,
 				IgnoreRecordNotFoundError: false,
 				Colorful:                  false,
@@ -236,16 +234,16 @@ func (entry *ClickHouseEntry) Bootstrap(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.zapLoggerEntry.Logger.Info("Bootstrap clickHouseEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap clickHouseEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
 		fields = append(fields, zap.Error(err))
-		entry.zapLoggerEntry.Logger.Error("Failed to connect to database", fields...)
-		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s",
+		entry.loggerEntry.Error("Failed to connect to database", fields...)
+		rkentry.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s",
 			entry.User, "****", entry.Addr))
 	}
 }
@@ -262,25 +260,25 @@ func (entry *ClickHouseEntry) Interrupt(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.zapLoggerEntry.Logger.Info("Interrupt clickHouseEntry", fields...)
+	entry.loggerEntry.Info("Interrupt clickHouseEntry", fields...)
 }
 
 // GetName returns entry name
 func (entry *ClickHouseEntry) GetName() string {
-	return entry.EntryName
+	return entry.entryName
 }
 
 // GetType returns entry type
 func (entry *ClickHouseEntry) GetType() string {
-	return entry.EntryType
+	return entry.entryType
 }
 
 // GetDescription returns entry description
 func (entry *ClickHouseEntry) GetDescription() string {
-	return entry.EntryDescription
+	return entry.entryDescription
 }
 
 // String returns json marshalled string
@@ -308,6 +306,7 @@ func (entry *ClickHouseEntry) IsHealthy() bool {
 	return true
 }
 
+// GetDB returns gorm.DB
 func (entry *ClickHouseEntry) GetDB(name string) *gorm.DB {
 	return entry.GormDbMap[name]
 }
@@ -327,7 +326,7 @@ func (entry *ClickHouseEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
 			dsn := fmt.Sprintf("tcp://%s?%s", entry.Addr, strings.Join(credentialParams, "&"))
 
 			db, err = gorm.Open(clickhouse.Open(dsn), entry.GormConfigMap[innerDb.name])
@@ -348,10 +347,10 @@ func (entry *ClickHouseEntry) connect() error {
 				return db.Error
 			}
 
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 		params := []string{
 			innerDb.name,
 		}
@@ -368,7 +367,7 @@ func (entry *ClickHouseEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil
@@ -394,7 +393,7 @@ func copyZapLoggerConfig(src *zap.Config) *zap.Config {
 
 // GetClickHouseEntry returns ClickHouseEntry instance
 func GetClickHouseEntry(name string) *ClickHouseEntry {
-	if raw := rkentry.GlobalAppCtx.GetEntry(name); raw != nil {
+	if raw := rkentry.GlobalAppCtx.GetEntry(ClickHouseEntryType, name); raw != nil {
 		if entry, ok := raw.(*ClickHouseEntry); ok {
 			return entry
 		}

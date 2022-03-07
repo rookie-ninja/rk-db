@@ -4,32 +4,9 @@ Init [gorm](https://github.com/go-gorm/gorm) from YAML config.
 
 This belongs to [rk-boot](https://github.com/rookie-ninja/rk-boot) family. We suggest use this lib from [rk-boot](https://github.com/rookie-ninja/rk-boot).
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Supported bootstrap](#supported-bootstrap)
-- [Supported Instances](#supported-instances)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-  - [0.Import rk-boot/gin as web framework to use](#0import-rk-bootgin-as-web-framework-to-use)
-  - [1.Create boot.yaml](#1create-bootyaml)
-  - [2.Create main.go](#2create-maingo)
-  - [3.Start server](#3start-server)
-  - [4.Validation](#4validation)
-    - [4.1 Create user](#41-create-user)
-    - [4.1 Update user](#41-update-user)
-    - [4.1 List users](#41-list-users)
-    - [4.1 Get user](#41-get-user)
-    - [4.1 Delete user](#41-delete-user)
-- [YAML Options](#yaml-options)
-  - [Usage of locale](#usage-of-locale)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
 ## Supported bootstrap
-| Bootstrap | Description |
-| --- | --- |
+| Bootstrap  | Description                                             |
+|------------|---------------------------------------------------------|
 | YAML based | Start [gorm](https://github.com/go-gorm/gorm) from YAML |
 | Code based | Start [gorm](https://github.com/go-gorm/gorm) from code |
 
@@ -38,14 +15,22 @@ All instances could be configured via YAML or Code.
 
 **User can enable anyone of those as needed! No mandatory binding!**
 
-| Instance | Description |
-| --- | --- |
-| gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
-| Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| AutoCreation | Automatically create DB if missing in MySQL |
+| Instance     | Description                                                                                                               |
+|--------------|---------------------------------------------------------------------------------------------------------------------------|
+| gorm.DB      | Compatible with original [gorm](https://github.com/go-gorm/gorm)                                                          |
+| Logger       | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
+| AutoCreation | Automatically create DB if missing in MySQL                                                                               |
 
 ## Installation
-`go get github.com/rookie-ninja/rk-db/mysql`
+- rk-boot: Bootstrapper base
+- rk-gin: Bootstrapper for [gin-gonic/gin](https://github.com/gin-gonic/gin) Web Framework for API
+- rk-db/mysql: Bootstrapper for [gorm](https://github.com/go-gorm/gorm) of mySQL
+
+```
+go get github.com/rookie-ninja/rk-boot/v2
+go get github.com/rookie-ninja/rk-gin/v2
+go get github.com/rookie-ninja/rk-db/mysql
+```
 
 ## Quick Start
 In the bellow example, we will run MySQL locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
@@ -57,12 +42,6 @@ In the bellow example, we will run MySQL locally and implement API of Create/Lis
 - DELETE /v1/user/:id, Delete user
 
 Please refer example at [example](example).
-
-### 0.Import rk-boot/gin as web framework to use
-
-```
-go get github.com/rookie-ninja/rk-boot/gin
-```
 
 ### 1.Create boot.yaml
 [boot.yaml](example/boot.yaml)
@@ -76,7 +55,7 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
-mySql:
+mysql:
   - name: user-db                     # Required
     enabled: true                     # Required
     locale: "*::*::*::*"              # Required
@@ -88,8 +67,7 @@ mySql:
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
 #        params: []                   # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
-#    logger:
-#      zapLogger: zap                 # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                  # Optional, default: default logger with STDOUT
 ```
 
 ### 2.Create main.go
@@ -300,21 +278,21 @@ success
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
-| name | Required | description | type | default value |
-| ------ | ------ | ------ | ------ | ------ |
-| mysql.name | Required | The name of entry | string | MySql |
-| mysql.enabled | Required | Enable entry or not | bool | false |
-| mysql.locale | Required | See locale description bellow | string | "" |
-| mysql.description | Optional | Description of echo entry. | string | "" |
-| mysql.user | Optional | MySQL username | string | root |
-| mysql.pass | Optional | MySQL password | string | pass |
-| mysql.protocol | Optional | Connection protocol to MySQL | string | tcp |
-| mysql.addr | Optional | MySQL remote address | string | localhost:3306 |
-| mysql.database.name | Required | Name of database | string | "" |
-| mysql.database.autoCreate | Optional | Create DB if missing | bool | false |
-| mysql.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
-| mysql.database.params | Optional | Connection params | []string | ["charset=utf8mb4","parseTime=True","loc=Local"] |
-| mysql.logger.zapLogger | Optional | Reference of zap logger entry name | string | "" |
+| name                      | Required | description                        | type     | default value                                    |
+|---------------------------|----------|------------------------------------|----------|--------------------------------------------------|
+| mysql.name                | Required | The name of entry                  | string   | MySql                                            |
+| mysql.enabled             | Required | Enable entry or not                | bool     | false                                            |
+| mysql.locale              | Required | See locale description bellow      | string   | ""                                               |
+| mysql.description         | Optional | Description of echo entry.         | string   | ""                                               |
+| mysql.user                | Optional | MySQL username                     | string   | root                                             |
+| mysql.pass                | Optional | MySQL password                     | string   | pass                                             |
+| mysql.protocol            | Optional | Connection protocol to MySQL       | string   | tcp                                              |
+| mysql.addr                | Optional | MySQL remote address               | string   | localhost:3306                                   |
+| mysql.database.name       | Required | Name of database                   | string   | ""                                               |
+| mysql.database.autoCreate | Optional | Create DB if missing               | bool     | false                                            |
+| mysql.database.dryRun     | Optional | Run gorm.DB with dry run mode      | bool     | false                                            |
+| mysql.database.params     | Optional | Connection params                  | []string | ["charset=utf8mb4","parseTime=True","loc=Local"] |
+| mysql.loggerEntry         | Optional | Reference of zap logger entry name | string   | ""                                               |
 
 ### Usage of locale
 

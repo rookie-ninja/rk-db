@@ -6,7 +6,7 @@ package rkredis
 
 import (
 	"context"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -16,7 +16,7 @@ func TestLogger_Printf(t *testing.T) {
 	assert.NotNil(t, NewLogger(nil))
 
 	// happy case
-	logger := NewLogger(rkentry.GlobalAppCtx.GetZapLoggerDefault())
+	logger := NewLogger(rkentry.LoggerEntryNoop.Logger)
 	assert.NotNil(t, logger)
 	logger.Printf(context.TODO(), "%s", "arg")
 }

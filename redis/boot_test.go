@@ -7,12 +7,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"math/big"
-	"os"
-	"path"
 	"testing"
 	"time"
 )
@@ -35,10 +32,7 @@ redis:
     addrs: ["localhost:3306"]
 `
 
-	tempDir := path.Join(t.TempDir(), "boot.yaml")
-	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(bootConfigStr), os.ModePerm))
-
-	entries := RegisterRedisEntryFromConfig(tempDir)
+	entries := RegisterRedisEntryYAML([]byte(bootConfigStr))
 
 	assert.NotEmpty(t, entries)
 
@@ -48,7 +42,7 @@ redis:
 	assert.NotEmpty(t, entry.GetDescription())
 	assert.NotEmpty(t, entry.String())
 
-	rkentry.GlobalAppCtx.RemoveEntry("ut-redis")
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 }
 
 func TestRedisEntry_Bootstrap(t *testing.T) {
@@ -95,24 +89,6 @@ func TestRedisEntry_Bootstrap(t *testing.T) {
 	cluster, ok = entry.GetClientCluster()
 	assert.NotNil(t, cluster)
 	assert.True(t, ok)
-
-	entry.Interrupt(context.TODO())
-
-	// tls
-	certEntry := rkentry.RegisterCertEntry()
-	certEntry.Store.ServerCert, certEntry.Store.ServerKey = generateCerts()
-	entry = RegisterRedisEntry(WithCertEntry(certEntry))
-	assert.True(t, entry.IsTlsEnabled())
-
-	entry.Bootstrap(context.TODO())
-
-	client, ok = entry.GetClient()
-	assert.NotNil(t, client)
-	assert.True(t, ok)
-
-	cluster, ok = entry.GetClientCluster()
-	assert.Nil(t, cluster)
-	assert.False(t, ok)
 
 	entry.Interrupt(context.TODO())
 }

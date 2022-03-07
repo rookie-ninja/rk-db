@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/rookie-ninja/rk-boot"
-	"github.com/rookie-ninja/rk-boot/gin"
+	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/mongodb"
+	"github.com/rookie-ninja/rk-gin/v2/boot"
 	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -39,7 +39,7 @@ func main() {
 	userCollection = db.Collection("meta")
 
 	// Register APIs
-	ginEntry := rkbootgin.GetGinEntry("user-service")
+	ginEntry := rkgin.GetGinEntry("user-service")
 	ginEntry.Router.GET("/v1/user", ListUsers)
 	ginEntry.Router.GET("/v1/user/:id", GetUser)
 	ginEntry.Router.PUT("/v1/user", CreateUser)

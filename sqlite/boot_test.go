@@ -6,12 +6,9 @@ package rksqlite
 
 import (
 	"context"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"io/ioutil"
-	"os"
-	"path"
 	"testing"
 )
 
@@ -27,7 +24,7 @@ func TestRegisterSqliteEntry(t *testing.T) {
 	assert.Empty(t, entry.GormConfigMap)
 
 	// remove entry
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 
 	// with options
 	entry = RegisterSqliteEntry(
@@ -43,7 +40,7 @@ func TestRegisterSqliteEntry(t *testing.T) {
 	assert.NotEmpty(t, entry.GormConfigMap)
 
 	// remove entry
-	rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	rkentry.GlobalAppCtx.RemoveEntry(entry)
 }
 
 func TestSqliteEntry_IsHealthy(t *testing.T) {
@@ -53,7 +50,7 @@ func TestSqliteEntry_IsHealthy(t *testing.T) {
 
 	assert.True(t, entry.IsHealthy())
 
-	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	defer rkentry.GlobalAppCtx.RemoveEntry(entry)
 	defer entry.Interrupt(context.TODO())
 }
 
@@ -92,7 +89,7 @@ func TestGetSqliteEntry(t *testing.T) {
 	assert.Nil(t, GetSqliteEntry(rkentry.GlobalAppCtx.GetAppInfoEntry().GetName()))
 
 	entry := RegisterSqliteEntry()
-	defer rkentry.GlobalAppCtx.RemoveEntry(entry.GetName())
+	defer rkentry.GlobalAppCtx.RemoveEntry(entry)
 	// happy case
 	assert.Equal(t, entry, GetSqliteEntry(entry.GetName()))
 }
@@ -109,20 +106,14 @@ sqlite:
 #        dbDir: ""                    # Optional, default: "", directory where db file created or imported, can be absolute or relative path
 #        dryRun: true                 # Optional, default: false
 #        params: []                   # Optional, default: ["cache=shared"]
-#    logger:
-#      level: warn                    # Optional, default: warn
-#      encoding: json                 # Optional, default: console
-#      outputPaths: [ "sqlite/log" ]  # Optional, default: []
+#    loggerEntry: ""
 `
 
-	tempDir := path.Join(t.TempDir(), "boot.yaml")
-	assert.Nil(t, ioutil.WriteFile(tempDir, []byte(bootConfigStr), os.ModePerm))
-
-	entries := RegisterSqliteEntriesWithConfig(tempDir)
+	entries := RegisterSqliteEntryYAML([]byte(bootConfigStr))
 
 	assert.NotEmpty(t, entries)
 
-	rkentry.GlobalAppCtx.RemoveEntry("user-db")
+	rkentry.GlobalAppCtx.RemoveEntry(entries["user-db"])
 }
 
 func TestSqliteEntry_Bootstrap(t *testing.T) {

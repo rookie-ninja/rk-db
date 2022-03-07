@@ -2,18 +2,19 @@
 //
 // Use of this source code is governed by an Apache-style
 // license that can be found in the LICENSE file.
+
 package rkmysql
 
 import (
 	"fmt"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.uber.org/zap"
 	"strings"
 )
 
 func NewLogger(zapLogger *zap.Logger) *Logger {
 	if zapLogger == nil {
-		zapLogger = rkentry.GlobalAppCtx.GetZapLoggerDefault()
+		zapLogger = rkentry.NewLoggerEntryStdout().Logger
 	}
 
 	return &Logger{

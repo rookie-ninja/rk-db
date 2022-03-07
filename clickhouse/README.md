@@ -4,32 +4,9 @@ Init [gorm](https://github.com/go-gorm/gorm) from YAML config.
 
 This belongs to [rk-boot](https://github.com/rookie-ninja/rk-boot) family. We suggest use this lib from [rk-boot](https://github.com/rookie-ninja/rk-boot).
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Supported bootstrap](#supported-bootstrap)
-- [Supported Instances](#supported-instances)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-  - [0.Import rk-boot/gin as web framework to use](#0import-rk-bootgin-as-web-framework-to-use)
-  - [1.Create boot.yaml](#1create-bootyaml)
-  - [2.Create main.go](#2create-maingo)
-  - [3.Start server](#3start-server)
-  - [4.Validation](#4validation)
-    - [4.1 Create user](#41-create-user)
-    - [4.1 Update user](#41-update-user)
-    - [4.1 List users](#41-list-users)
-    - [4.1 Get user](#41-get-user)
-    - [4.1 Delete user](#41-delete-user)
-- [YAML Options](#yaml-options)
-  - [Usage of locale](#usage-of-locale)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
 ## Supported bootstrap
-| Bootstrap | Description |
-| --- | --- |
+| Bootstrap  | Description                                             |
+|------------|---------------------------------------------------------|
 | YAML based | Start [gorm](https://github.com/go-gorm/gorm) from YAML |
 | Code based | Start [gorm](https://github.com/go-gorm/gorm) from code |
 
@@ -38,14 +15,22 @@ All instances could be configured via YAML or Code.
 
 **User can enable anyone of those as needed! No mandatory binding!**
 
-| Instance | Description |
-| --- | --- |
-| gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
-| Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| AutoCreation | Automatically create DB if missing in ClickHouse |
+| Instance     | Description                                                                                                               |
+|--------------|---------------------------------------------------------------------------------------------------------------------------|
+| gorm.DB      | Compatible with original [gorm](https://github.com/go-gorm/gorm)                                                          |
+| Logger       | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
+| AutoCreation | Automatically create DB if missing in ClickHouse                                                                          |
 
 ## Installation
-`go get github.com/rookie-ninja/rk-db/clickhouse`
+- rk-boot: Bootstrapper base
+- rk-gin: Bootstrapper for [gin-gonic/gin](https://github.com/gin-gonic/gin) Web Framework for API
+- rk-db/clickhouse: Bootstrapper for [gorm](https://github.com/go-gorm/gorm) of clickhouse
+
+```
+go get github.com/rookie-ninja/rk-boot/v2
+go get github.com/rookie-ninja/rk-gin/v2
+go get github.com/rookie-ninja/rk-db/clickhouse
+```
 
 ## Quick Start
 In the bellow example, we will run ClickHouse locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
@@ -57,12 +42,6 @@ In the bellow example, we will run ClickHouse locally and implement API of Creat
 - DELETE /v1/user/:id, Delete user
 
 Please refer example at [example](example).
-
-### 0.Import rk-boot/gin as web framework to use
-
-```
-go get github.com/rookie-ninja/rk-boot/gin
-```
 
 ### 1.Create boot.yaml
 [boot.yaml](example/boot.yaml)
@@ -76,7 +55,7 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
-clickHouse:
+clickhouse:
   - name: user-db                          # Required
     enabled: true                          # Required
     locale: "*::*::*::*"                   # Required
@@ -88,8 +67,7 @@ clickHouse:
         autoCreate: true                   # Optional, default: false
 #        dryRun: false                     # Optional, default: false
 #        params: []                        # Optional, default: []
-#    logger:
-#      zapLogger: zap                      # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                       # Optional, default: default logger with STDOUT
 ```
 
 ### 2.Create main.go
@@ -109,9 +87,9 @@ package main
 import (
 	"context"
 	"github.com/gin-gonic/gin"
-	"github.com/rookie-ninja/rk-boot"
-	"github.com/rookie-ninja/rk-boot/gin"
+	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/clickhouse"
+	"github.com/rookie-ninja/rk-gin/v2/boot"
 	"github.com/rs/xid"
 	"gorm.io/gorm"
 	"net/http"
@@ -133,7 +111,7 @@ func main() {
 	}
 
 	// Register APIs
-	ginEntry := rkbootgin.GetGinEntry("user-service")
+	ginEntry := rkgin.GetGinEntry("user-service")
 	ginEntry.Router.GET("/v1/user", ListUsers)
 	ginEntry.Router.GET("/v1/user/:id", GetUser)
 	ginEntry.Router.PUT("/v1/user", CreateUser)
@@ -148,8 +126,8 @@ func main() {
 // *************************************
 
 type Base struct {
-	CreatedAt time.Time      `yaml:"-" json:"-"`
-	UpdatedAt time.Time      `yaml:"-" json:"-"`
+	CreatedAt time.Time `yaml:"-" json:"-"`
+	UpdatedAt time.Time `yaml:"-" json:"-"`
 }
 
 type User struct {
@@ -183,7 +161,7 @@ func GetUser(ctx *gin.Context) {
 
 func CreateUser(ctx *gin.Context) {
 	user := &User{
-		Id: xid.New().String(),
+		Id:   xid.New().String(),
 		Name: ctx.Query("name"),
 	}
 
@@ -199,7 +177,7 @@ func CreateUser(ctx *gin.Context) {
 func UpdateUser(ctx *gin.Context) {
 	uid := ctx.Param("id")
 	user := &User{
-		Id: uid,
+		Id:   uid,
 		Name: ctx.Query("name"),
 	}
 
@@ -303,20 +281,20 @@ success
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
-| name | Required | description | type | default value |
-| ------ | ------ | ------ | ------ | ------ |
-| clickHouse.name | Required | The name of entry | string | ClickHouse |
-| clickHouse.enabled | Required | Enable entry or not | bool | false |
-| clickHouse.locale | Required | See locale description bellow | string | "" |
-| clickHouse.description | Optional | Description of echo entry. | string | "" |
-| clickHouse.user | Optional | ClickHouse username | string | root |
-| clickHouse.pass | Optional | ClickHouse password | string | pass |
-| clickHouse.addr | Optional | ClickHouse remote address | string | localhost:9000 |
-| clickHouse.database.name | Required | Name of database | string | "" |
-| clickHouse.database.autoCreate | Optional | Create DB if missing | bool | false |
-| clickHouse.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
-| clickHouse.database.params | Optional | Connection params | []string | [""] |
-| clickHouse.logger.zapLogger | Optional | Reference of zap logger entry name | string | "" |
+| name                           | Required | description                        | type     | default value  |
+|--------------------------------|----------|------------------------------------|----------|----------------|
+| clickhouse.name                | Required | The name of entry                  | string   | ClickHouse     |
+| clickhouse.enabled             | Required | Enable entry or not                | bool     | false          |
+| clickhouse.locale              | Required | See locale description bellow      | string   | ""             |
+| clickhouse.description         | Optional | Description of echo entry.         | string   | ""             |
+| clickhouse.user                | Optional | ClickHouse username                | string   | root           |
+| clickhouse.pass                | Optional | ClickHouse password                | string   | pass           |
+| clickhouse.addr                | Optional | ClickHouse remote address          | string   | localhost:9000 |
+| clickhouse.database.name       | Required | Name of database                   | string   | ""             |
+| clickhouse.database.autoCreate | Optional | Create DB if missing               | bool     | false          |
+| clickhouse.database.dryRun     | Optional | Run gorm.DB with dry run mode      | bool     | false          |
+| clickhouse.database.params     | Optional | Connection params                  | []string | [""]           |
+| clickhouse.loggerEntry         | Optional | Reference of zap logger entry name | string   | ""             |
 
 ### Usage of locale
 

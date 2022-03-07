@@ -13,5 +13,4 @@ sqlite:
 #        dbDir: ""                    # Optional, default: "", directory where db file created or imported, can be absolute or relative path
 #        dryRun: true                 # Optional, default: false
 #        params: []                   # Optional, default: ["cache=shared"]
-#    logger:
-#      zapLogger: zap                 # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                  # Optional, default: default logger with STDOUT

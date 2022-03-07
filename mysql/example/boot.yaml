@@ -3,7 +3,7 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
-mySql:
+mysql:
   - name: user-db                     # Required
     enabled: true                     # Required
     locale: "*::*::*::*"              # Required
@@ -16,5 +16,4 @@ mySql:
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
 #        params: []                   # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
-#    logger:
-#      zapLogger: zap                 # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                  # Optional, default: default logger with STDOUT

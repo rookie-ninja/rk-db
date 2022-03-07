@@ -2,13 +2,14 @@
 //
 // Use of this source code is governed by an Apache-style
 // license that can be found in the LICENSE file.
+
 package rkredis
 
 import (
 	"context"
 	"github.com/go-redis/redis/extra/rediscmd/v8"
 	"github.com/go-redis/redis/v8"
-	"github.com/rookie-ninja/rk-entry/middleware"
+	"github.com/rookie-ninja/rk-entry/v2/middleware"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"

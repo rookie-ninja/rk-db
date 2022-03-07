@@ -4,32 +4,9 @@ Init [gorm](https://github.com/go-gorm/gorm) from YAML config.
 
 This belongs to [rk-boot](https://github.com/rookie-ninja/rk-boot) family. We suggest use this lib from [rk-boot](https://github.com/rookie-ninja/rk-boot).
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Supported bootstrap](#supported-bootstrap)
-- [Supported Instances](#supported-instances)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-  - [0.Import rk-boot/gin as web framework to use](#0import-rk-bootgin-as-web-framework-to-use)
-  - [1.Create boot.yaml](#1create-bootyaml)
-  - [2.Create main.go](#2create-maingo)
-  - [3.Start server](#3start-server)
-  - [4.Validation](#4validation)
-    - [4.1 Create user](#41-create-user)
-    - [4.1 Update user](#41-update-user)
-    - [4.1 List users](#41-list-users)
-    - [4.1 Get user](#41-get-user)
-    - [4.1 Delete user](#41-delete-user)
-- [YAML Options](#yaml-options)
-  - [Usage of locale](#usage-of-locale)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
 ## Supported bootstrap
-| Bootstrap | Description |
-| --- | --- |
+| Bootstrap  | Description                                             |
+|------------|---------------------------------------------------------|
 | YAML based | Start [gorm](https://github.com/go-gorm/gorm) from YAML |
 | Code based | Start [gorm](https://github.com/go-gorm/gorm) from code |
 
@@ -38,14 +15,22 @@ All instances could be configured via YAML or Code.
 
 **User can enable anyone of those as needed! No mandatory binding!**
 
-| Instance | Description |
-| --- | --- |
-| gorm.DB | Compatible with original [gorm](https://github.com/go-gorm/gorm) |
-| Logger | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
-| AutoCreation | Automatically create DB if missing in PostgreSQL |
+| Instance     | Description                                                                                                               |
+|--------------|---------------------------------------------------------------------------------------------------------------------------|
+| gorm.DB      | Compatible with original [gorm](https://github.com/go-gorm/gorm)                                                          |
+| Logger       | Implementation of [gorm](https://github.com/go-gorm/gorm) wrapped by [uber-go/zap](https://github.com/uber-go/zap) logger |
+| AutoCreation | Automatically create DB if missing in PostgreSQL                                                                          |
 
 ## Installation
-`go get github.com/rookie-ninja/rk-db/postgres`
+- rk-boot: Bootstrapper base
+- rk-gin: Bootstrapper for [gin-gonic/gin](https://github.com/gin-gonic/gin) Web Framework for API
+- rk-db/postgres: Bootstrapper for [gorm](https://github.com/go-gorm/gorm) of postgreSQL
+
+```
+go get github.com/rookie-ninja/rk-boot/v2
+go get github.com/rookie-ninja/rk-gin/v2
+go get github.com/rookie-ninja/rk-db/postgres
+```
 
 ## Quick Start
 In the bellow example, we will run PostgreSQL locally and implement API of Create/List/Get/Update/Delete for User model with Gin.
@@ -57,12 +42,6 @@ In the bellow example, we will run PostgreSQL locally and implement API of Creat
 - DELETE /v1/user/:id, Delete user
 
 Please refer example at [example](example).
-
-### 0.Import rk-boot/gin as web framework to use
-
-```
-go get github.com/rookie-ninja/rk-boot/gin
-```
 
 ### 1.Create boot.yaml
 [boot.yaml](example/boot.yaml)
@@ -86,11 +65,10 @@ postgres:
     database:
       - name: user                    # Required
         autoCreate: true              # Optional, default: false
-#        dryRun: false                # Optional, default: false
+#        dryRun: true                 # Optional, default: false
 #        preferSimpleProtocol: false  # Optional, default: false
 #        params: []                   # Optional, default: ["sslmode=disable","TimeZone=Asia/Shanghai"]
-#    logger:
-#      zapLogger: zap                 # Optional, default: default logger with STDOUT
+#    loggerEntry: ""                  # Optional, default: default logger with STDOUT
 ```
 
 ### 2.Create main.go
@@ -110,9 +88,9 @@ package main
 import (
 	"context"
 	"github.com/gin-gonic/gin"
-	"github.com/rookie-ninja/rk-boot"
-	"github.com/rookie-ninja/rk-boot/gin"
+	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/postgres"
+	"github.com/rookie-ninja/rk-gin/v2/boot"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -134,7 +112,7 @@ func main() {
 	}
 
 	// Register APIs
-	ginEntry := rkbootgin.GetGinEntry("user-service")
+	ginEntry := rkgin.GetGinEntry("user-service")
 	ginEntry.Router.GET("/v1/user", ListUsers)
 	ginEntry.Router.GET("/v1/user/:id", GetUser)
 	ginEntry.Router.PUT("/v1/user", CreateUser)
@@ -313,21 +291,21 @@ success
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
-| name | Required | description | type | default value |
-| ------ | ------ | ------ | ------ | ------ |
-| postgres.name | Required | The name of entry | string | PostgreSQL |
-| postgres.enabled | Required | Enable entry or not | bool | false |
-| postgres.locale | Required | See locale description bellow | string | "" |
-| postgres.description | Optional | Description of echo entry. | string | "" |
-| postgres.user | Optional | PostgreSQL username | string | postgres |
-| postgres.pass | Optional | PostgreSQL password | string | pass |
-| postgres.addr | Optional | PostgreSQL remote address | string | localhost:5432 |
-| postgres.database.name | Required | Name of database | string | "" |
-| postgres.database.autoCreate | Optional | Create DB if missing | bool | false |
-| postgres.database.dryRun | Optional | Run gorm.DB with dry run mode | bool | false |
-| postgres.database.preferSimpleProtocol | Optional | Disable prepared statement cache | bool | false |
-| postgres.database.params | Optional | Connection params | []string | ["sslmode=disable","TimeZone=Asia/Shanghai"] |
-| postgres.logger.zapLogger | Optional | Reference of zap logger entry name | string | "" |
+| name                                   | Required | description                        | type     | default value                                |
+|----------------------------------------|----------|------------------------------------|----------|----------------------------------------------|
+| postgres.name                          | Required | The name of entry                  | string   | PostgreSQL                                   |
+| postgres.enabled                       | Required | Enable entry or not                | bool     | false                                        |
+| postgres.locale                        | Required | See locale description bellow      | string   | ""                                           |
+| postgres.description                   | Optional | Description of echo entry.         | string   | ""                                           |
+| postgres.user                          | Optional | PostgreSQL username                | string   | postgres                                     |
+| postgres.pass                          | Optional | PostgreSQL password                | string   | pass                                         |
+| postgres.addr                          | Optional | PostgreSQL remote address          | string   | localhost:5432                               |
+| postgres.database.name                 | Required | Name of database                   | string   | ""                                           |
+| postgres.database.autoCreate           | Optional | Create DB if missing               | bool     | false                                        |
+| postgres.database.dryRun               | Optional | Run gorm.DB with dry run mode      | bool     | false                                        |
+| postgres.database.preferSimpleProtocol | Optional | Disable prepared statement cache   | bool     | false                                        |
+| postgres.database.params               | Optional | Connection params                  | []string | ["sslmode=disable","TimeZone=Asia/Shanghai"] |
+| postgres.loggerEntry                   | Optional | Reference of zap logger entry name | string   | ""                                           |
 
 ### Usage of locale
 

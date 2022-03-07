@@ -11,8 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rookie-ninja/rk-common/common"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -24,12 +23,14 @@ import (
 // This must be declared in order to register registration function into rk context
 // otherwise, rk-boot won't able to bootstrap echo entry automatically from boot config file
 func init() {
-	rkentry.RegisterEntryRegFunc(RegisterPostgresEntriesWithConfig)
+	rkentry.RegisterEntryRegFunc(RegisterPostgresEntryYAML)
 }
 
-// BootConfig
+const PostgreSqlEntry = "PostgreSqlEntry"
+
+// BootPostgres
 // Postgres entry boot config which reflects to YAML config
-type BootConfig struct {
+type BootPostgres struct {
 	Postgres []struct {
 		Enabled     bool   `yaml:"enabled" json:"enabled"`
 		Name        string `yaml:"name" json:"name"`
@@ -45,9 +46,7 @@ type BootConfig struct {
 			AutoCreate           bool     `yaml:"autoCreate" json:"autoCreate"`
 			PreferSimpleProtocol bool     `yaml:"preferSimpleProtocol" json:"preferSimpleProtocol"`
 		} `yaml:"database" json:"database"`
-		Logger struct {
-			ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
-		} `yaml:"logger" json:"logger"`
+		LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
 	} `yaml:"postgres" json:"postgres"`
 }
 
@@ -58,7 +57,7 @@ type PostgresEntry struct {
 	EntryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
-	zapLoggerEntry   *rkentry.ZapLoggerEntry `yaml:"-" json:"-"`
+	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
 	Addr             string                  `yaml:"addr" json:"addr"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
 	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
@@ -73,7 +72,7 @@ type databaseInner struct {
 	params               []string
 }
 
-// DataStore will be extended in future.
+// Option will be extended in future.
 type Option func(*PostgresEntry)
 
 // WithName provide name.
@@ -145,25 +144,25 @@ func WithDatabase(name string, dryRun, autoCreate, preferSimpleProtocol bool, pa
 	}
 }
 
-// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
-func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
+// WithLoggerEntry provide rkentry.LoggerEntry entry name
+func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *PostgresEntry) {
 		if entry != nil {
-			m.zapLoggerEntry = entry
+			m.loggerEntry = entry
 		}
 	}
 }
 
-// RegisterPostgresEntriesWithConfig register PostgresEntry based on config file into rkentry.GlobalAppCtx
-func RegisterPostgresEntriesWithConfig(configFilePath string) map[string]rkentry.Entry {
+// RegisterPostgresEntryYAML register PostgresEntry based on config file into rkentry.GlobalAppCtx
+func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
 	// 1: unmarshal user provided config into boot config struct
-	config := &BootConfig{}
-	rkcommon.UnmarshalBootConfig(configFilePath, config)
+	config := &BootPostgres{}
+	rkentry.UnmarshalBootYAML(raw, config)
 
 	for _, element := range config.Postgres {
-		if len(element.Name) < 1 || !rkcommon.MatchLocaleWithEnv(element.Locale) {
+		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
 			continue
 		}
 
@@ -173,7 +172,7 @@ func RegisterPostgresEntriesWithConfig(configFilePath string) map[string]rkentry
 			WithUser(element.User),
 			WithPass(element.Pass),
 			WithAddr(element.Addr),
-			WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)),
+			WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
 		}
 
 		// iterate database section
@@ -193,13 +192,13 @@ func RegisterPostgresEntriesWithConfig(configFilePath string) map[string]rkentry
 func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 	entry := &PostgresEntry{
 		EntryName:        "PostgreSQL",
-		EntryType:        "PostgreSQL",
+		EntryType:        PostgreSqlEntry,
 		EntryDescription: "PostgreSQL entry for gorm.DB",
 		User:             "postgres",
 		pass:             "pass",
 		Addr:             "localhost:5432",
 		innerDbList:      make([]*databaseInner, 0),
-		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
+		loggerEntry:      rkentry.NewLoggerEntryStdout(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}
@@ -219,8 +218,8 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: logger.New(NewLogger(entry.zapLoggerEntry.Logger), logger.Config{
-				SlowThreshold:             200 * time.Millisecond,
+			Logger: logger.New(NewLogger(entry.loggerEntry.Logger), logger.Config{
+				SlowThreshold:             5000 * time.Millisecond,
 				LogLevel:                  logger.Warn,
 				IgnoreRecordNotFoundError: false,
 				Colorful:                  false,
@@ -249,13 +248,13 @@ func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
 		zap.String("entryName", entry.EntryName),
 		zap.String("entryType", entry.EntryType))
 
-	entry.zapLoggerEntry.Logger.Info("Bootstrap postgresEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap postgresEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
 		fields = append(fields, zap.Error(err))
-		entry.zapLoggerEntry.Logger.Error("Failed to connect to database", fields...)
-		rkcommon.ShutdownWithError(fmt.Errorf("failed to connect to database at %s@%s",
+		entry.loggerEntry.Error("Failed to connect to database", fields...)
+		rkentry.ShutdownWithError(fmt.Errorf("failed to connect to database at %s@%s",
 			entry.User, entry.Addr))
 	}
 }
@@ -275,7 +274,7 @@ func (entry *PostgresEntry) Interrupt(ctx context.Context) {
 		zap.String("entryName", entry.EntryName),
 		zap.String("entryType", entry.EntryType))
 
-	entry.zapLoggerEntry.Logger.Info("Interrupt postgres entry", fields...)
+	entry.loggerEntry.Info("Interrupt postgres entry", fields...)
 }
 
 // GetName returns entry name
@@ -349,7 +348,7 @@ func (entry *PostgresEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] if not exists", innerDb.name))
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s] if not exists", innerDb.name))
 
 			// It is a little bit complex procedure here
 			// connect to database postgres and try to create DB
@@ -376,17 +375,17 @@ func (entry *PostgresEntry) connect() error {
 
 			// 3: database not found, create one
 			if len(innerDbInfo) < 1 {
-				entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", innerDb.name, entry.User))
+				entry.loggerEntry.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", innerDb.name, entry.User))
 				res := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER %s ENCODING %s`, innerDb.name, entry.User, "UTF8"))
 				if res.Error != nil {
 					return res.Error
 				}
 			}
 
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 
 		// 2: connect
 		params = append(params, fmt.Sprintf("dbname=%s", innerDb.name))
@@ -400,7 +399,7 @@ func (entry *PostgresEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil
@@ -426,7 +425,7 @@ func copyZapLoggerConfig(src *zap.Config) *zap.Config {
 
 // GetPostgresEntry returns PostgresEntry instance
 func GetPostgresEntry(name string) *PostgresEntry {
-	if raw := rkentry.GlobalAppCtx.GetEntry(name); raw != nil {
+	if raw := rkentry.GlobalAppCtx.GetEntry(PostgreSqlEntry, name); raw != nil {
 		if entry, ok := raw.(*PostgresEntry); ok {
 			return entry
 		}

@@ -8,14 +8,16 @@ import (
 	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/rookie-ninja/rk-boot"
-	"github.com/rookie-ninja/rk-boot/gin"
+	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/mysql"
+	"github.com/rookie-ninja/rk-gin/v2/boot"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+var model interface{}
 
 var userDb *gorm.DB
 
@@ -27,6 +29,8 @@ func main() {
 	// Auto migrate database and init global userDb variable
 	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
 	userDb = mysqlEntry.GetDB("user")
+	model = User{}
+
 	if !userDb.DryRun {
 		userDb.AutoMigrate(&User{})
 	}
@@ -38,11 +42,10 @@ func main() {
 
 	for res.Next() {
 		res.Scan(&table)
-		fmt.Println(table)
 	}
 
 	// Register APIs
-	ginEntry := rkbootgin.GetGinEntry("user-service")
+	ginEntry := rkgin.GetGinEntry("user-service")
 	ginEntry.Router.GET("/v1/user", ListUsers)
 	ginEntry.Router.GET("/v1/user/:id", GetUser)
 	ginEntry.Router.PUT("/v1/user", CreateUser)
@@ -69,7 +72,7 @@ type User struct {
 }
 
 func ListUsers(ctx *gin.Context) {
-	userList := make([]*User, 0)
+	userList := make([]User, 0)
 	res := userDb.Find(&userList)
 
 	if res.Error != nil {
@@ -83,6 +86,8 @@ func GetUser(ctx *gin.Context) {
 	uid := ctx.Param("id")
 	user := &User{}
 	res := userDb.Where("id = ?", uid).Find(user)
+
+	fmt.Println(ctx.Request.URL.Query())
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)

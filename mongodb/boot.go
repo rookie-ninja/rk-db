@@ -10,8 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rookie-ninja/rk-common/common"
-	"github.com/rookie-ninja/rk-entry/entry"
+	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOpt "go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
@@ -22,12 +21,14 @@ import (
 // This must be declared in order to register registration function into rk context
 // otherwise, rk-boot won't able to bootstrap echo entry automatically from boot config file
 func init() {
-	rkentry.RegisterEntryRegFunc(RegisterMongoEntriesFromConfig)
+	rkentry.RegisterEntryRegFunc(RegisterMongoEntryYAML)
 }
+
+const MongoEntryType = "MongoEntry"
 
 // GetMongoEntry returns MongoEntry
 func GetMongoEntry(entryName string) *MongoEntry {
-	if v := rkentry.GlobalAppCtx.GetEntry(entryName); v != nil {
+	if v := rkentry.GlobalAppCtx.GetEntry(MongoEntryType, entryName); v != nil {
 		if res, ok := v.(*MongoEntry); ok {
 			return res
 		}
@@ -60,12 +61,10 @@ type BootConfigMongo struct {
 	Database    []struct {
 		Name string `yaml:"name" json:"name"`
 	}
-	Logger struct {
-		ZapLogger string `yaml:"zapLogger" json:"zapLogger"`
-	} `yaml:"logger" json:"logger"`
-	CertEntry string  `yaml:"certEntry" json:"certEntry"`
-	AppName   *string `yaml:"appName" json:"appName"`
-	Auth      *struct {
+	LoggerEntry string  `yaml:"loggerEntry" json:"loggerEntry"`
+	CertEntry   string  `yaml:"certEntry" json:"certEntry"`
+	AppName     *string `yaml:"appName" json:"appName"`
+	Auth        *struct {
 		Mechanism           string            `yaml:"mechanism" json:"mechanism"`
 		MechanismProperties map[string]string `yaml:"mechanismProperties" json:"mechanismProperties"`
 		Source              string            `yaml:"source" json:"source"`
@@ -185,13 +184,13 @@ func ToClientOptions(config *BootConfigMongo) *mongoOpt.ClientOptions {
 	return opt
 }
 
-// RegisterMongoEntriesFromConfig register MongoEntry based on config file into rkentry.GlobalAppCtx
-func RegisterMongoEntriesFromConfig(configFilePath string) map[string]rkentry.Entry {
+// RegisterMongoEntryYAML register MongoEntry based on config file into rkentry.GlobalAppCtx
+func RegisterMongoEntryYAML(raw []byte) map[string]rkentry.Entry {
 	res := make(map[string]rkentry.Entry)
 
 	// 1: unmarshal user provided config into boot config struct
 	config := &BootConfig{}
-	rkcommon.UnmarshalBootConfig(configFilePath, config)
+	rkentry.UnmarshalBootYAML(raw, config)
 
 	for i := range config.Mongo {
 		element := config.Mongo[i]
@@ -206,7 +205,7 @@ func RegisterMongoEntriesFromConfig(configFilePath string) map[string]rkentry.En
 				WithDescription(element.Description),
 				WithClientOptions(clientOpt),
 				WithCertEntry(certEntry),
-				WithZapLoggerEntry(rkentry.GlobalAppCtx.GetZapLoggerEntry(element.Logger.ZapLogger)),
+				WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
 			}
 
 			// iterate database
@@ -226,10 +225,10 @@ func RegisterMongoEntriesFromConfig(configFilePath string) map[string]rkentry.En
 // RegisterMongoEntry will register Entry into GlobalAppCtx
 func RegisterMongoEntry(opts ...Option) *MongoEntry {
 	entry := &MongoEntry{
-		EntryName:        "Mongo",
-		EntryType:        "Mongo",
-		EntryDescription: "Mongo entry for mongo-go-driver client",
-		zapLoggerEntry:   rkentry.GlobalAppCtx.GetZapLoggerEntryDefault(),
+		entryName:        "MongoDB",
+		entryType:        MongoEntryType,
+		entryDescription: "Mongo entry for mongo-go-driver client",
+		loggerEntry:      rkentry.NewLoggerEntryStdout(),
 		mongoDbMap:       make(map[string]*mongo.Database),
 		mongoDbOpts:      make(map[string][]*mongoOpt.DatabaseOptions),
 		Opts:             mongoOpt.Client().ApplyURI("mongodb://localhost:27017"),
@@ -243,14 +242,14 @@ func RegisterMongoEntry(opts ...Option) *MongoEntry {
 		entry.Opts.ApplyURI("mongodb://localhost:27017")
 	}
 
-	if len(entry.EntryName) < 1 {
-		entry.EntryName = "mongo-" + strings.Join(entry.Opts.Hosts, "-")
+	if len(entry.entryName) < 1 {
+		entry.entryName = "mongo-" + strings.Join(entry.Opts.Hosts, "-")
 	}
 
-	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s",
-			entry.EntryType,
-			entry.EntryName)
+	if len(entry.entryDescription) < 1 {
+		entry.entryDescription = fmt.Sprintf("%s entry with name of %s",
+			entry.entryType,
+			entry.entryName)
 	}
 
 	rkentry.GlobalAppCtx.AddEntry(entry)
@@ -260,15 +259,15 @@ func RegisterMongoEntry(opts ...Option) *MongoEntry {
 
 // MongoEntry will init mongo.Client with provided arguments
 type MongoEntry struct {
-	EntryName        string                                 `yaml:"entryName" yaml:"entryName"`
-	EntryType        string                                 `yaml:"entryType" yaml:"entryType"`
-	EntryDescription string                                 `yaml:"-" json:"-"`
+	entryName        string                                 `yaml:"entryName" yaml:"entryName"`
+	entryType        string                                 `yaml:"entryType" yaml:"entryType"`
+	entryDescription string                                 `yaml:"-" json:"-"`
 	Opts             *mongoOpt.ClientOptions                `yaml:"-" json:"-"`
 	Client           *mongo.Client                          `yaml:"-" json:"-"`
 	mongoDbMap       map[string]*mongo.Database             `yaml:"-" json:"-"`
 	mongoDbOpts      map[string][]*mongoOpt.DatabaseOptions `yaml:"-" json:"-"`
 	certEntry        *rkentry.CertEntry                     `yaml:"-" json:"-"`
-	zapLoggerEntry   *rkentry.ZapLoggerEntry                `yaml:"-" json:"-"`
+	loggerEntry      *rkentry.LoggerEntry                   `yaml:"-" json:"-"`
 }
 
 // Bootstrap MongoEntry
@@ -283,26 +282,26 @@ func (entry *MongoEntry) Bootstrap(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.zapLoggerEntry.Logger.Info("Bootstrap mongoDbEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap mongoDbEntry", fields...)
 
 	// connect to mongo
-	entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating mongoDB client at %v", entry.Opts.Hosts))
+	entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v", entry.Opts.Hosts))
 
 	if client, err := mongo.Connect(context.Background(), entry.Opts); err != nil {
-		entry.zapLoggerEntry.Logger.Error(fmt.Sprintf("Creating mongoDB client at %v failed", entry.Opts.Hosts))
-		rkcommon.ShutdownWithError(err)
+		entry.loggerEntry.Error(fmt.Sprintf("Creating mongoDB client at %v failed", entry.Opts.Hosts))
+		rkentry.ShutdownWithError(err)
 	} else {
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating mongoDB client at %v success", entry.Opts.Hosts))
+		entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v success", entry.Opts.Hosts))
 		entry.Client = client
 	}
 
 	// create database
 	for k, v := range entry.mongoDbOpts {
 		entry.mongoDbMap[k] = entry.Client.Database(k, v...)
-		entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Creating database instance [%s] success", k))
+		entry.loggerEntry.Info(fmt.Sprintf("Creating database instance [%s] success", k))
 	}
 }
 
@@ -318,33 +317,33 @@ func (entry *MongoEntry) Interrupt(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.zapLoggerEntry.Logger.Info("Interrupt mongoDbEntry", fields...)
+	entry.loggerEntry.Info("Interrupt mongoDbEntry", fields...)
 
 	if entry.Client != nil {
 		if err := entry.Client.Disconnect(context.Background()); err != nil {
-			entry.zapLoggerEntry.Logger.Warn(fmt.Sprintf("Disconnecting from mongoDB at %v failed", entry.Opts.Hosts))
+			entry.loggerEntry.Warn(fmt.Sprintf("Disconnecting from mongoDB at %v failed", entry.Opts.Hosts))
 		} else {
-			entry.zapLoggerEntry.Logger.Info(fmt.Sprintf("Disconnecting from mongoDB at %v success", entry.Opts.Hosts))
+			entry.loggerEntry.Info(fmt.Sprintf("Disconnecting from mongoDB at %v success", entry.Opts.Hosts))
 		}
 	}
 }
 
 // GetName returns entry name
 func (entry *MongoEntry) GetName() string {
-	return entry.EntryName
+	return entry.entryName
 }
 
 // GetType returns entry type
 func (entry *MongoEntry) GetType() string {
-	return entry.EntryType
+	return entry.entryType
 }
 
 // GetDescription returns entry description
 func (entry *MongoEntry) GetDescription() string {
-	return entry.EntryDescription
+	return entry.entryDescription
 }
 
 // String returns json marshalled string
@@ -380,14 +379,14 @@ type Option func(entry *MongoEntry)
 // WithName provide name.
 func WithName(name string) Option {
 	return func(entry *MongoEntry) {
-		entry.EntryName = name
+		entry.entryName = name
 	}
 }
 
 // WithDescription provide name.
 func WithDescription(description string) Option {
 	return func(entry *MongoEntry) {
-		entry.EntryDescription = description
+		entry.entryDescription = description
 	}
 }
 
@@ -417,11 +416,11 @@ func WithClientOptions(opt *mongoOpt.ClientOptions) Option {
 	}
 }
 
-// WithZapLoggerEntry provide rkentry.ZapLoggerEntry entry name
-func WithZapLoggerEntry(entry *rkentry.ZapLoggerEntry) Option {
+// WithLoggerEntry provide rkentry.LoggerEntry entry name
+func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *MongoEntry) {
 		if entry != nil {
-			m.zapLoggerEntry = entry
+			m.loggerEntry = entry
 		}
 	}
 }
