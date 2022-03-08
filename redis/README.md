@@ -41,7 +41,7 @@ In the bellow example, we will run Redis locally and implement API of Get/Set of
 Please refer example at [example](.).
 
 ### 1.Create boot.yaml
-[boot.yaml](boot.yaml)
+[boot.yaml](example/boot.yaml)
 
 - Create web server with Gin framework at port 8080
 - Create Redis entry which connects Redis at localhost:6379
