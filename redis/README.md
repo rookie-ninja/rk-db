@@ -24,7 +24,7 @@ All instances could be configured via YAML or Code.
 ## Installation
 - rk-boot: Bootstrapper base
 - rk-gin: Bootstrapper for [gin-gonic/gin](https://github.com/gin-gonic/gin) Web Framework for API
-- rk-db/redis: Bootstrapper for [gorm](https://github.com/go-gorm/gorm) of redis
+- rk-db/redis: Bootstrapper for [go-redis](https://github.com/go-redis/redis) of redis
 
 ```
 go get github.com/rookie-ninja/rk-boot/v2
