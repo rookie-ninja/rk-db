@@ -3,7 +3,7 @@ module github.com/rookie-ninja/rk-db/mysql
 go 1.17
 
 require (
-	github.com/rookie-ninja/rk-entry/v2 v2.0.2
+	github.com/rookie-ninja/rk-entry/v2 v2.0.4
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.21.0
 	gorm.io/driver/mysql v1.2.2
@@ -33,8 +33,6 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/rookie-ninja/rk-boot/v2 v2.0.0 // indirect
-	github.com/rookie-ninja/rk-gin/v2 v2.0.1 // indirect
 	github.com/rookie-ninja/rk-logger v1.2.10 // indirect
 	github.com/rookie-ninja/rk-query v1.2.11 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
