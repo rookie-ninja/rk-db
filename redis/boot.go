@@ -46,7 +46,7 @@ func GetRedisEntry(entryName string) *RedisEntry {
 // BootRedis
 // Redis entry boot config which reflects to YAML config
 type BootRedis struct {
-	Redis []BootRedisE `yaml:"redis" json:"redis"`
+	Redis []*BootRedisE `yaml:"redis" json:"redis"`
 }
 
 // BootRedisE sub struct for BootRedis
@@ -54,7 +54,7 @@ type BootRedisE struct {
 	Name                 string   `yaml:"name" json:"name"` // Required
 	Description          string   `yaml:"description" json:"description"`
 	Enabled              bool     `yaml:"enabled" json:"enabled"` // Required
-	Locale               string   `yaml:"locale" json:"locale"`
+	Domain               string   `yaml:"domain" json:"domain"`
 	Addrs                []string `yaml:"addrs" json:"addrs"` // Required
 	MasterName           string   `yaml:"masterName" json:"masterName"`
 	SentinelPass         string   `yaml:"sentinelPass" json:"sentinelPass"`
@@ -123,55 +123,70 @@ func RegisterRedisEntryYAML(raw []byte) map[string]rkentry.Entry {
 	config := &BootRedis{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
-	for i := range config.Redis {
-		element := config.Redis[i]
-
-		if element.Enabled {
-			if len(element.Locale) < 1 {
-				element.Locale = "*::*::*::*"
-			}
-
-			if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
-				continue
-			}
-
-			universalOpt := &redis.UniversalOptions{
-				Addrs:              element.Addrs,
-				DB:                 element.DB,
-				Username:           element.User,
-				Password:           element.Pass,
-				SentinelPassword:   element.SentinelPass,
-				MaxRetries:         element.MaxRetries,
-				MinRetryBackoff:    time.Duration(element.MinRetryBackoffMs) * time.Millisecond,
-				MaxRetryBackoff:    time.Duration(element.MaxRetryBackoffMs) * time.Millisecond,
-				DialTimeout:        time.Duration(element.DialTimeoutMs) * time.Millisecond,
-				ReadTimeout:        time.Duration(element.ReadTimeoutMs) * time.Millisecond,
-				WriteTimeout:       time.Duration(element.WriteTimeoutMs) * time.Millisecond,
-				PoolFIFO:           element.PoolFIFO,
-				PoolSize:           element.PoolSize,
-				MinIdleConns:       element.MinIdleConn,
-				MaxConnAge:         time.Duration(element.MaxConnAgeMs) * time.Millisecond,
-				PoolTimeout:        time.Duration(element.PoolTimeoutMs) * time.Millisecond,
-				IdleTimeout:        time.Duration(element.IdleTimeoutMs) * time.Millisecond,
-				IdleCheckFrequency: time.Duration(element.IdleCheckFrequencyMs) * time.Millisecond,
-				MaxRedirects:       element.MaxRedirects,
-				ReadOnly:           element.ReadOnly,
-				RouteByLatency:     element.RouteByLatency,
-				RouteRandomly:      element.RouteRandomly,
-				MasterName:         element.MasterName,
-			}
-
-			certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.CertEntry)
-
-			entry := RegisterRedisEntry(
-				WithName(element.Name),
-				WithDescription(element.Description),
-				WithUniversalOption(universalOpt),
-				WithCertEntry(certEntry),
-				WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)))
-
-			res[entry.GetName()] = entry
+	// filter out based domain
+	configMap := make(map[string]*BootRedisE)
+	for _, e := range config.Redis {
+		if !e.Enabled || len(e.Name) < 1 {
+			continue
 		}
+
+		if !rkentry.IsValidDomain(e.Domain) {
+			continue
+		}
+
+		// * or matching domain
+		// 1: add it to map if missing
+		if _, ok := configMap[e.Name]; !ok {
+			configMap[e.Name] = e
+			continue
+		}
+
+		// 2: already has an entry, then compare domain,
+		//    only one case would occur, previous one is already the correct one, continue
+		if e.Domain == "" || e.Domain == "*" {
+			continue
+		}
+
+		configMap[e.Name] = e
+	}
+
+	for _, element := range configMap {
+		universalOpt := &redis.UniversalOptions{
+			Addrs:              element.Addrs,
+			DB:                 element.DB,
+			Username:           element.User,
+			Password:           element.Pass,
+			SentinelPassword:   element.SentinelPass,
+			MaxRetries:         element.MaxRetries,
+			MinRetryBackoff:    time.Duration(element.MinRetryBackoffMs) * time.Millisecond,
+			MaxRetryBackoff:    time.Duration(element.MaxRetryBackoffMs) * time.Millisecond,
+			DialTimeout:        time.Duration(element.DialTimeoutMs) * time.Millisecond,
+			ReadTimeout:        time.Duration(element.ReadTimeoutMs) * time.Millisecond,
+			WriteTimeout:       time.Duration(element.WriteTimeoutMs) * time.Millisecond,
+			PoolFIFO:           element.PoolFIFO,
+			PoolSize:           element.PoolSize,
+			MinIdleConns:       element.MinIdleConn,
+			MaxConnAge:         time.Duration(element.MaxConnAgeMs) * time.Millisecond,
+			PoolTimeout:        time.Duration(element.PoolTimeoutMs) * time.Millisecond,
+			IdleTimeout:        time.Duration(element.IdleTimeoutMs) * time.Millisecond,
+			IdleCheckFrequency: time.Duration(element.IdleCheckFrequencyMs) * time.Millisecond,
+			MaxRedirects:       element.MaxRedirects,
+			ReadOnly:           element.ReadOnly,
+			RouteByLatency:     element.RouteByLatency,
+			RouteRandomly:      element.RouteRandomly,
+			MasterName:         element.MasterName,
+		}
+
+		certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.CertEntry)
+
+		entry := RegisterRedisEntry(
+			WithName(element.Name),
+			WithDescription(element.Description),
+			WithUniversalOption(universalOpt),
+			WithCertEntry(certEntry),
+			WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)))
+
+		res[entry.GetName()] = entry
 	}
 
 	return res
@@ -250,7 +265,7 @@ func (entry *RedisEntry) Bootstrap(ctx context.Context) {
 		zap.String("entryType", entry.entryType),
 		zap.String("clientType", entry.ClientType))
 
-	entry.loggerEntry.Info("Bootstrap redisEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap RedisEntry", fields...)
 
 	if entry.IsTlsEnabled() {
 		entry.Opts.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*entry.certEntry.Certificate}}
@@ -287,7 +302,7 @@ func (entry *RedisEntry) Interrupt(ctx context.Context) {
 		zap.String("entryType", entry.entryType),
 		zap.String("clientType", entry.ClientType))
 
-	entry.loggerEntry.Info("Interrupt redisEntry", fields...)
+	entry.loggerEntry.Info("Interrupt RedisEntry", fields...)
 }
 
 // GetName returns entry name

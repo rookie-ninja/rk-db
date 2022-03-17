@@ -3,7 +3,7 @@ module github.com/rookie-ninja/rk-db/mongodb
 go 1.17
 
 require (
-	github.com/rookie-ninja/rk-entry/v2 v2.0.4
+	github.com/rookie-ninja/rk-entry/v2 v2.1.3
 	github.com/stretchr/testify v1.7.0
 	go.mongodb.org/mongo-driver v1.8.2
 	go.uber.org/zap v1.21.0
@@ -16,6 +16,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/golang-jwt/jwt/v4 v4.3.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/go-cmp v0.5.7 // indirect
@@ -32,8 +33,8 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/rookie-ninja/rk-logger v1.2.10 // indirect
-	github.com/rookie-ninja/rk-query v1.2.11 // indirect
+	github.com/rookie-ninja/rk-logger v1.2.11 // indirect
+	github.com/rookie-ninja/rk-query v1.2.14 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect

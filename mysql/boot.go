@@ -30,23 +30,25 @@ const MySqlEntryType = "MySqlEntry"
 // BootMySQL
 // MySql entry boot config which reflects to YAML config
 type BootMySQL struct {
-	MySql []struct {
-		Enabled     bool   `yaml:"enabled" json:"enabled"`
-		Name        string `yaml:"name" json:"name"`
-		Description string `yaml:"description" json:"description"`
-		Locale      string `yaml:"locale" json:"locale"`
-		User        string `yaml:"user" json:"user"`
-		Pass        string `yaml:"pass" json:"pass"`
-		Protocol    string `yaml:"protocol" json:"protocol"`
-		Addr        string `yaml:"addr" json:"addr"`
-		Database    []struct {
-			Name       string   `yaml:"name" json:"name"`
-			Params     []string `yaml:"params" json:"params"`
-			DryRun     bool     `yaml:"dryRun" json:"dryRun"`
-			AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
-		} `yaml:"database" json:"database"`
-		LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
-	} `yaml:"mysql" json:"mysql"`
+	MySql []*BootMySQLE `yaml:"mysql" json:"mysql"`
+}
+
+type BootMySQLE struct {
+	Enabled     bool   `yaml:"enabled" json:"enabled"`
+	Name        string `yaml:"name" json:"name"`
+	Description string `yaml:"description" json:"description"`
+	Domain      string `yaml:"domain" json:"domain"`
+	User        string `yaml:"user" json:"user"`
+	Pass        string `yaml:"pass" json:"pass"`
+	Protocol    string `yaml:"protocol" json:"protocol"`
+	Addr        string `yaml:"addr" json:"addr"`
+	Database    []struct {
+		Name       string   `yaml:"name" json:"name"`
+		Params     []string `yaml:"params" json:"params"`
+		DryRun     bool     `yaml:"dryRun" json:"dryRun"`
+		AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
+	} `yaml:"database" json:"database"`
+	LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
 }
 
 // MySqlEntry will init gorm.DB or SqlMock with provided arguments
@@ -169,15 +171,34 @@ func RegisterMySqlEntryYAML(raw []byte) map[string]rkentry.Entry {
 	config := &BootMySQL{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
-	for _, element := range config.MySql {
-		if len(element.Locale) < 1 {
-			element.Locale = "*::*::*::*"
-		}
-
-		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
+	// filter out based domain
+	configMap := make(map[string]*BootMySQLE)
+	for _, e := range config.MySql {
+		if !e.Enabled || len(e.Name) < 1 {
 			continue
 		}
 
+		if !rkentry.IsValidDomain(e.Domain) {
+			continue
+		}
+
+		// * or matching domain
+		// 1: add it to map if missing
+		if _, ok := configMap[e.Name]; !ok {
+			configMap[e.Name] = e
+			continue
+		}
+
+		// 2: already has an entry, then compare domain,
+		//    only one case would occur, previous one is already the correct one, continue
+		if e.Domain == "" || e.Domain == "*" {
+			continue
+		}
+
+		configMap[e.Name] = e
+	}
+
+	for _, element := range configMap {
 		opts := []Option{
 			WithName(element.Name),
 			WithDescription(element.Description),
@@ -262,7 +283,7 @@ func (entry *MySqlEntry) Bootstrap(ctx context.Context) {
 		zap.String("entryName", entry.entryName),
 		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Bootstrap mySqlEntry", fields...)
+	entry.loggerEntry.Info("Bootstrap MySqlEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
@@ -288,7 +309,7 @@ func (entry *MySqlEntry) Interrupt(ctx context.Context) {
 		zap.String("entryName", entry.entryName),
 		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Interrupt mySqlEntry", fields...)
+	entry.loggerEntry.Info("Interrupt MySqlEntry", fields...)
 }
 
 // GetName returns entry name

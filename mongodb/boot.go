@@ -49,7 +49,7 @@ func GetMongoDB(entryName, dbName string) *mongo.Database {
 // BootMongo
 // MongoEntry boot config which reflects to YAML config
 type BootMongo struct {
-	Mongo []BootMongoE `yaml:"mongo" json:"mongo"`
+	Mongo []*BootMongoE `yaml:"mongo" json:"mongo"`
 }
 
 // BootMongoE sub struct for BootConfig
@@ -57,7 +57,7 @@ type BootMongoE struct {
 	Name          string `yaml:"name" json:"name"`
 	Enabled       bool   `yaml:"enabled" json:"enabled"`
 	Description   string `yaml:"description" json:"description"`
-	Locale        string `yaml:"locale" json:"locale"`
+	Domain        string `yaml:"domain" json:"domain"`
 	SimpleURI     string `yaml:"simpleURI" json:"simpleURI"`
 	PingTimeoutMs int    `yaml:"pingTimeoutMs" json:"pingTimeoutMs"`
 	Database      []struct {
@@ -194,19 +194,36 @@ func RegisterMongoEntryYAML(raw []byte) map[string]rkentry.Entry {
 	config := &BootMongo{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
-	for i := range config.Mongo {
-		element := config.Mongo[i]
+	// filter out based domain
+	configMap := make(map[string]*BootMongoE)
+	for _, e := range config.Mongo {
+		if !e.Enabled || len(e.Name) < 1 {
+			continue
+		}
 
+		if !rkentry.IsValidDomain(e.Domain) {
+			continue
+		}
+
+		// * or matching domain
+		// 1: add it to map if missing
+		if _, ok := configMap[e.Name]; !ok {
+			configMap[e.Name] = e
+			continue
+		}
+
+		// 2: already has an entry, then compare domain,
+		//    only one case would occur, previous one is already the correct one, continue
+		if e.Domain == "" || e.Domain == "*" {
+			continue
+		}
+
+		configMap[e.Name] = e
+	}
+
+	for _, element := range configMap {
 		if element.Enabled {
-			if len(element.Locale) < 1 {
-				element.Locale = "*::*::*::*"
-			}
-
-			if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
-				continue
-			}
-
-			clientOpt := ToClientOptions(&element)
+			clientOpt := ToClientOptions(element)
 
 			certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.CertEntry)
 

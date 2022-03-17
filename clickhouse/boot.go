@@ -30,22 +30,24 @@ func init() {
 // BootConfig
 // ClickHouse entry boot config which reflects to YAML config
 type BootConfig struct {
-	ClickHouse []struct {
-		Enabled     bool   `yaml:"enabled" json:"enabled"`
-		Name        string `yaml:"name" json:"name"`
-		Description string `yaml:"description" json:"description"`
-		Locale      string `yaml:"locale" json:"locale"`
-		User        string `yaml:"user" json:"user"`
-		Pass        string `yaml:"pass" json:"pass"`
-		Addr        string `yaml:"addr" json:"addr"`
-		Database    []struct {
-			Name       string   `yaml:"name" json:"name"`
-			Params     []string `yaml:"params" json:"params"`
-			DryRun     bool     `yaml:"dryRun" json:"dryRun"`
-			AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
-		} `yaml:"database" json:"database"`
-		LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
-	} `yaml:"clickhouse" json:"clickhouse"`
+	ClickHouse []*BootConfigE `yaml:"clickhouse" json:"clickhouse"`
+}
+
+type BootConfigE struct {
+	Enabled     bool   `yaml:"enabled" json:"enabled"`
+	Name        string `yaml:"name" json:"name"`
+	Description string `yaml:"description" json:"description"`
+	Domain      string `yaml:"domain" json:"domain"`
+	User        string `yaml:"user" json:"user"`
+	Pass        string `yaml:"pass" json:"pass"`
+	Addr        string `yaml:"addr" json:"addr"`
+	Database    []struct {
+		Name       string   `yaml:"name" json:"name"`
+		Params     []string `yaml:"params" json:"params"`
+		DryRun     bool     `yaml:"dryRun" json:"dryRun"`
+		AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
+	} `yaml:"database" json:"database"`
+	LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
 }
 
 // ClickHouseEntry will init gorm.DB or SqlMock with provided arguments
@@ -150,15 +152,34 @@ func RegisterClickHouseEntryYAML(raw []byte) map[string]rkentry.Entry {
 	config := &BootConfig{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
-	for _, element := range config.ClickHouse {
-		if len(element.Locale) < 1 {
-			element.Locale = "*::*::*::*"
-		}
-
-		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
+	// filter out based domain
+	configMap := make(map[string]*BootConfigE)
+	for _, e := range config.ClickHouse {
+		if !e.Enabled || len(e.Name) < 1 {
 			continue
 		}
 
+		if !rkentry.IsValidDomain(e.Domain) {
+			continue
+		}
+
+		// * or matching domain
+		// 1: add it to map if missing
+		if _, ok := configMap[e.Name]; !ok {
+			configMap[e.Name] = e
+			continue
+		}
+
+		// 2: already has an entry, then compare domain,
+		//    only one case would occur, previous one is already the correct one, continue
+		if e.Domain == "" || e.Domain == "*" {
+			continue
+		}
+
+		configMap[e.Name] = e
+	}
+
+	for _, element := range configMap {
 		opts := []Option{
 			WithName(element.Name),
 			WithDescription(element.Description),

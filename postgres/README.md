@@ -58,7 +58,7 @@ gin:
 postgres:
   - name: user-db                     # Required
     enabled: true                     # Required
-    locale: "*::*::*::*"              # Required
+    domain: "*"                       # Optional
     addr: "localhost:5432"            # Optional, default: localhost:5432
     user: postgres                    # Optional, default: postgres
     pass: pass                        # Optional, default: pass
@@ -295,7 +295,7 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 |----------------------------------------|----------|------------------------------------|----------|----------------------------------------------|
 | postgres.name                          | Required | The name of entry                  | string   | PostgreSQL                                   |
 | postgres.enabled                       | Required | Enable entry or not                | bool     | false                                        |
-| postgres.locale                        | Required | See locale description bellow      | string   | ""                                           |
+| postgres.domain                        | Optional | See locale description bellow      | string   | "*"                                          |
 | postgres.description                   | Optional | Description of echo entry.         | string   | ""                                           |
 | postgres.user                          | Optional | PostgreSQL username                | string   | postgres                                     |
 | postgres.pass                          | Optional | PostgreSQL password                | string   | pass                                         |
@@ -307,35 +307,19 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | postgres.database.params               | Optional | Connection params                  | []string | ["sslmode=disable","TimeZone=Asia/Shanghai"] |
 | postgres.loggerEntry                   | Optional | Reference of zap logger entry name | string   | ""                                           |
 
-### Usage of locale
+### Usage of domain
 
 ```
-RK use <realm>::<region>::<az>::<domain> to distinguish different environment.
-Variable of <locale> could be composed as form of <realm>::<region>::<az>::<domain>
-- realm: It could be a company, department and so on, like RK-Corp.
-         Environment variable: REALM
-         Eg: RK-Corp
-         Wildcard: supported
-
-- region: Please see AWS web site: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html
-          Environment variable: REGION
-          Eg: us-east
-          Wildcard: supported
-
-- az: Availability zone, please see AWS web site for details: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html
-      Environment variable: AZ
-      Eg: us-east-1
-      Wildcard: supported
-
+RK use <domain> to distinguish different environment.
+Variable of <locale> could be composed as form of <domain>
 - domain: Stands for different environment, like dev, test, prod and so on, users can define it by themselves.
           Environment variable: DOMAIN
           Eg: prod
           Wildcard: supported
 
 How it works?
-First, we will split locale with "::" and extract realm, region, az and domain.
-Second, get environment variable named as REALM, REGION, AZ and DOMAIN.
-Finally, compare every element in locale variable and environment variable.
+Firstly, get environment variable named as  DOMAIN.
+Secondly, compare every element in locale variable and environment variable.
 If variables in locale represented as wildcard(*), we will ignore comparison step.
 
 Example:
@@ -345,12 +329,12 @@ Example:
 ---
 DB:
   - name: redis-default
-    locale: "*::*::*::*"
+    domain: "*"
     addr: "192.0.0.1:6379"
   - name: redis-in-test
-    locale: "*::*::*::test"
+    domain: "test"
     addr: "192.0.0.1:6379"
   - name: redis-in-prod
-    locale: "*::*::*::prod"
+    domain: "prod"
     addr: "176.0.0.1:6379"
 ```

@@ -194,6 +194,7 @@ redis:
   - name: redis                      # Required
     enabled: true                    # Required
     addrs: ["localhost:6379"]        # Required, One addr is for single, multiple is for cluster
+    domain: "*"                      # Optional
 #    description: ""                 # Optional
 #
 #    # For HA
@@ -228,36 +229,19 @@ redis:
 #    loggerEntry: ""                 # Optional, default: default logger with STDOUT
 ```
 
-### Usage of locale
-TBD
+### Usage of domain
 
 ```
-RK use <realm>::<region>::<az>::<domain> to distinguish different environment.
-Variable of <locale> could be composed as form of <realm>::<region>::<az>::<domain>
-- realm: It could be a company, department and so on, like RK-Corp.
-         Environment variable: REALM
-         Eg: RK-Corp
-         Wildcard: supported
-
-- region: Please see AWS web site: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html
-          Environment variable: REGION
-          Eg: us-east
-          Wildcard: supported
-
-- az: Availability zone, please see AWS web site for details: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html
-      Environment variable: AZ
-      Eg: us-east-1
-      Wildcard: supported
-
+RK use <domain> to distinguish different environment.
+Variable of <locale> could be composed as form of <domain>
 - domain: Stands for different environment, like dev, test, prod and so on, users can define it by themselves.
           Environment variable: DOMAIN
           Eg: prod
           Wildcard: supported
 
 How it works?
-First, we will split locale with "::" and extract realm, region, az and domain.
-Second, get environment variable named as REALM, REGION, AZ and DOMAIN.
-Finally, compare every element in locale variable and environment variable.
+Firstly, get environment variable named as  DOMAIN.
+Secondly, compare every element in locale variable and environment variable.
 If variables in locale represented as wildcard(*), we will ignore comparison step.
 
 Example:
@@ -267,12 +251,12 @@ Example:
 ---
 DB:
   - name: redis-default
-    locale: "*::*::*::*"
+    domain: "*"
     addr: "192.0.0.1:6379"
   - name: redis-in-test
-    locale: "*::*::*::test"
+    domain: "test"
     addr: "192.0.0.1:6379"
   - name: redis-in-prod
-    locale: "*::*::*::prod"
+    domain: "prod"
     addr: "176.0.0.1:6379"
 ```

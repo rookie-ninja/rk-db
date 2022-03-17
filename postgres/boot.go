@@ -31,30 +31,32 @@ const PostgreSqlEntry = "PostgreSqlEntry"
 // BootPostgres
 // Postgres entry boot config which reflects to YAML config
 type BootPostgres struct {
-	Postgres []struct {
-		Enabled     bool   `yaml:"enabled" json:"enabled"`
-		Name        string `yaml:"name" json:"name"`
-		Description string `yaml:"description" json:"description"`
-		Locale      string `yaml:"locale" json:"locale"`
-		User        string `yaml:"user" json:"user"`
-		Pass        string `yaml:"pass" json:"pass"`
-		Addr        string `yaml:"addr" json:"addr"`
-		Database    []struct {
-			Name                 string   `yaml:"name" json:"name"`
-			Params               []string `yaml:"params" json:"params"`
-			DryRun               bool     `yaml:"dryRun" json:"dryRun"`
-			AutoCreate           bool     `yaml:"autoCreate" json:"autoCreate"`
-			PreferSimpleProtocol bool     `yaml:"preferSimpleProtocol" json:"preferSimpleProtocol"`
-		} `yaml:"database" json:"database"`
-		LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
-	} `yaml:"postgres" json:"postgres"`
+	Postgres []*BootPostgresE `yaml:"postgres" json:"postgres"`
+}
+
+type BootPostgresE struct {
+	Enabled     bool   `yaml:"enabled" json:"enabled"`
+	Name        string `yaml:"name" json:"name"`
+	Description string `yaml:"description" json:"description"`
+	Domain      string `yaml:"domain" json:"domain"`
+	User        string `yaml:"user" json:"user"`
+	Pass        string `yaml:"pass" json:"pass"`
+	Addr        string `yaml:"addr" json:"addr"`
+	Database    []struct {
+		Name                 string   `yaml:"name" json:"name"`
+		Params               []string `yaml:"params" json:"params"`
+		DryRun               bool     `yaml:"dryRun" json:"dryRun"`
+		AutoCreate           bool     `yaml:"autoCreate" json:"autoCreate"`
+		PreferSimpleProtocol bool     `yaml:"preferSimpleProtocol" json:"preferSimpleProtocol"`
+	} `yaml:"database" json:"database"`
+	LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
 }
 
 // PostgresEntry will init gorm.DB with provided arguments
 type PostgresEntry struct {
-	EntryName        string                  `yaml:"entryName" json:"entryName"`
-	EntryType        string                  `yaml:"entryType" json:"entryType"`
-	EntryDescription string                  `yaml:"-" json:"-"`
+	entryName        string                  `yaml:"entryName" json:"entryName"`
+	entryType        string                  `yaml:"entryType" json:"entryType"`
+	entryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
 	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
@@ -78,14 +80,14 @@ type Option func(*PostgresEntry)
 // WithName provide name.
 func WithName(name string) Option {
 	return func(entry *PostgresEntry) {
-		entry.EntryName = name
+		entry.entryName = name
 	}
 }
 
 // WithDescription provide name.
 func WithDescription(description string) Option {
 	return func(entry *PostgresEntry) {
-		entry.EntryDescription = description
+		entry.entryDescription = description
 	}
 }
 
@@ -161,15 +163,34 @@ func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
 	config := &BootPostgres{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
-	for _, element := range config.Postgres {
-		if len(element.Locale) < 1 {
-			element.Locale = "*::*::*::*"
-		}
-
-		if len(element.Name) < 1 || !rkentry.IsLocaleValid(element.Locale) {
+	// filter out based domain
+	configMap := make(map[string]*BootPostgresE)
+	for _, e := range config.Postgres {
+		if !e.Enabled || len(e.Name) < 1 {
 			continue
 		}
 
+		if !rkentry.IsValidDomain(e.Domain) {
+			continue
+		}
+
+		// * or matching domain
+		// 1: add it to map if missing
+		if _, ok := configMap[e.Name]; !ok {
+			configMap[e.Name] = e
+			continue
+		}
+
+		// 2: already has an entry, then compare domain,
+		//    only one case would occur, previous one is already the correct one, continue
+		if e.Domain == "" || e.Domain == "*" {
+			continue
+		}
+
+		configMap[e.Name] = e
+	}
+
+	for _, element := range configMap {
 		opts := []Option{
 			WithName(element.Name),
 			WithDescription(element.Description),
@@ -195,9 +216,9 @@ func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
 // RegisterPostgresEntry will register Entry into GlobalAppCtx
 func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 	entry := &PostgresEntry{
-		EntryName:        "PostgreSQL",
-		EntryType:        PostgreSqlEntry,
-		EntryDescription: "PostgreSQL entry for gorm.DB",
+		entryName:        "PostgreSQL",
+		entryType:        PostgreSqlEntry,
+		entryDescription: "PostgreSQL entry for gorm.DB",
 		User:             "postgres",
 		pass:             "pass",
 		Addr:             "localhost:5432",
@@ -211,10 +232,10 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 		opts[i](entry)
 	}
 
-	if len(entry.EntryDescription) < 1 {
-		entry.EntryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
-			entry.EntryType,
-			entry.EntryName,
+	if len(entry.entryDescription) < 1 {
+		entry.entryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
+			entry.entryType,
+			entry.entryName,
 			entry.Addr,
 			entry.User)
 	}
@@ -249,8 +270,8 @@ func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
 	entry.loggerEntry.Info("Bootstrap postgresEntry", fields...)
 
@@ -275,25 +296,25 @@ func (entry *PostgresEntry) Interrupt(ctx context.Context) {
 	}
 
 	fields = append(fields,
-		zap.String("entryName", entry.EntryName),
-		zap.String("entryType", entry.EntryType))
+		zap.String("entryName", entry.entryName),
+		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Interrupt postgres entry", fields...)
+	entry.loggerEntry.Info("Interrupt PostgresEntry", fields...)
 }
 
 // GetName returns entry name
 func (entry *PostgresEntry) GetName() string {
-	return entry.EntryName
+	return entry.entryName
 }
 
 // GetType returns entry type
 func (entry *PostgresEntry) GetType() string {
-	return entry.EntryType
+	return entry.entryType
 }
 
 // GetDescription returns entry description
 func (entry *PostgresEntry) GetDescription() string {
-	return entry.EntryDescription
+	return entry.entryDescription
 }
 
 // String returns json marshalled string
