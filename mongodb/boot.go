@@ -10,12 +10,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOpt "go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
-	"strings"
-	"time"
 )
 
 // This must be declared in order to register registration function into rk context
@@ -303,48 +305,51 @@ type MongoEntry struct {
 	certEntry        *rkentry.CertEntry                     `yaml:"-" json:"-"`
 	loggerEntry      *rkentry.LoggerEntry                   `yaml:"-" json:"-"`
 	pingTimeoutMs    time.Duration                          `yaml:"-" json:"-"`
+	bootstrapLogOnce sync.Once                              `json:"-" yaml:"-"`
 }
 
 // Bootstrap MongoEntry
 func (entry *MongoEntry) Bootstrap(ctx context.Context) {
-	// extract eventId if exists
-	fields := make([]zap.Field, 0)
+	entry.bootstrapLogOnce.Do(func() {
+		// extract eventId if exists
+		fields := make([]zap.Field, 0)
 
-	if val := ctx.Value("eventId"); val != nil {
-		if id, ok := val.(string); ok {
-			fields = append(fields, zap.String("eventId", id))
+		if val := ctx.Value("eventId"); val != nil {
+			if id, ok := val.(string); ok {
+				fields = append(fields, zap.String("eventId", id))
+			}
 		}
-	}
 
-	fields = append(fields,
-		zap.String("entryName", entry.entryName),
-		zap.String("entryType", entry.entryType))
+		fields = append(fields,
+			zap.String("entryName", entry.entryName),
+			zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Bootstrap mongoDbEntry", fields...)
+		entry.loggerEntry.Info("Bootstrap mongoDbEntry", fields...)
 
-	// connect to mongo
-	entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v", entry.Opts.Hosts))
+		// connect to mongo
+		entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v", entry.Opts.Hosts))
 
-	if client, err := mongo.Connect(context.Background(), entry.Opts); err != nil {
-		entry.loggerEntry.Error(fmt.Sprintf("Creating mongoDB client at %v failed", entry.Opts.Hosts))
-		rkentry.ShutdownWithError(err)
-	} else {
-		entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v success", entry.Opts.Hosts))
-		entry.Client = client
-	}
+		if client, err := mongo.Connect(context.Background(), entry.Opts); err != nil {
+			entry.loggerEntry.Error(fmt.Sprintf("Creating mongoDB client at %v failed", entry.Opts.Hosts))
+			rkentry.ShutdownWithError(err)
+		} else {
+			entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v success", entry.Opts.Hosts))
+			entry.Client = client
+		}
 
-	// try ping
-	pingCtx, _ := context.WithTimeout(context.Background(), entry.pingTimeoutMs)
-	if err := entry.Client.Ping(pingCtx, nil); err != nil {
-		entry.loggerEntry.Error(fmt.Sprintf("Ping mongoDB at %v failed", entry.Opts.Hosts))
-		rkentry.ShutdownWithError(err)
-	}
+		// try ping
+		pingCtx, _ := context.WithTimeout(context.Background(), entry.pingTimeoutMs)
+		if err := entry.Client.Ping(pingCtx, nil); err != nil {
+			entry.loggerEntry.Error(fmt.Sprintf("Ping mongoDB at %v failed", entry.Opts.Hosts))
+			rkentry.ShutdownWithError(err)
+		}
 
-	// create database
-	for k, v := range entry.mongoDbOpts {
-		entry.mongoDbMap[k] = entry.Client.Database(k, v...)
-		entry.loggerEntry.Info(fmt.Sprintf("Creating database instance [%s] success", k))
-	}
+		// create database
+		for k, v := range entry.mongoDbOpts {
+			entry.mongoDbMap[k] = entry.Client.Database(k, v...)
+			entry.loggerEntry.Info(fmt.Sprintf("Creating database instance [%s] success", k))
+		}
+	})
 }
 
 // Interrupt MongoEntry
@@ -411,6 +416,14 @@ func (entry *MongoEntry) GetMongoDB(dbName string) *mongo.Database {
 // GetMongoClientOptions returns options.ClientOptions
 func (entry *MongoEntry) GetMongoClientOptions() *mongoOpt.ClientOptions {
 	return entry.Opts
+}
+
+// GetDefaultMongoDB returns first mongo.Database
+func (entry *MongoEntry) GetDefaultMongoDB() *mongo.Database {
+	for _, v := range entry.mongoDbMap {
+		return v
+	}
+	return nil
 }
 
 // ************ Option ************
