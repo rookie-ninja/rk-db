@@ -413,6 +413,15 @@ func (entry *MongoEntry) GetMongoClientOptions() *mongoOpt.ClientOptions {
 	return entry.Opts
 }
 
+// GetDefaultMongoDB returns first mongo.Database
+func (entry *MongoEntry) GetDefaultMongoDB() *mongo.Database {
+	for _, v := range entry.mongoDbMap{
+		return v
+	}
+	return nil
+}
+
+
 // ************ Option ************
 
 // Option for MongoEntry
