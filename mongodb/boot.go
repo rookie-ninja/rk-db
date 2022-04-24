@@ -126,6 +126,7 @@ func ToClientOptions(config *BootMongoE) *mongoOpt.ClientOptions {
 		ZlibLevel:                config.ZlibLevel,
 		ZstdLevel:                config.ZstdLevel,
 	}
+
 	// auth
 	if config.Auth != nil {
 		opt.Auth = &mongoOpt.Credential{
@@ -183,6 +184,10 @@ func ToClientOptions(config *BootMongoE) *mongoOpt.ClientOptions {
 		opt.SocketTimeout = &t
 	}
 
+	// Apply simple URI, will overwrite the above configuration
+	if config.SimpleURI != "" {
+		opt = opt.ApplyURI(config.SimpleURI)
+	}
 	return opt
 }
 
