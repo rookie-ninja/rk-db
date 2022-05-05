@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/mongodb"
+	rkentry "github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/rookie-ninja/rk-gin/v2/boot"
 	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
@@ -18,6 +20,13 @@ import (
 var (
 	userCollection *mongo.Collection
 )
+
+//go:embed certs
+var certsFS embed.FS
+
+func init() {
+	rkentry.GlobalAppCtx.AddEmbedFS(rkentry.CertEntryType, "my-cert", &certsFS)
+}
 
 func createCollection(db *mongo.Database, name string) {
 	opts := options.CreateCollection()
