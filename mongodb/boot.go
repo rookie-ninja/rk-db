@@ -8,16 +8,16 @@ package rkmongo
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.mongodb.org/mongo-driver/mongo"
 	mongoOpt "go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
+	"strings"
+	"sync"
+	"time"
 )
 
 // This must be declared in order to register registration function into rk context
@@ -65,10 +65,11 @@ type BootMongoE struct {
 	Database      []struct {
 		Name string `yaml:"name" json:"name"`
 	}
-	LoggerEntry string  `yaml:"loggerEntry" json:"loggerEntry"`
-	CertEntry   string  `yaml:"certEntry" json:"certEntry"`
-	AppName     *string `yaml:"appName" json:"appName"`
-	Auth        *struct {
+	LoggerEntry        string  `yaml:"loggerEntry" json:"loggerEntry"`
+	CertEntry          string  `yaml:"certEntry" json:"certEntry"`
+	InsecureSkipVerify bool    `yaml:"insecureSkipVerify" json:"insecureSkipVerify"`
+	AppName            *string `yaml:"appName" json:"appName"`
+	Auth               *struct {
 		Mechanism           string            `yaml:"mechanism" json:"mechanism"`
 		MechanismProperties map[string]string `yaml:"mechanismProperties" json:"mechanismProperties"`
 		Source              string            `yaml:"source" json:"source"`
@@ -240,6 +241,7 @@ func RegisterMongoEntryYAML(raw []byte) map[string]rkentry.Entry {
 				WithClientOptions(clientOpt),
 				WithCertEntry(certEntry),
 				WithPingTimeoutMs(element.PingTimeoutMs),
+				WithInsecureSkipVerify(element.InsecureSkipVerify),
 				WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
 			}
 
@@ -295,22 +297,23 @@ func RegisterMongoEntry(opts ...Option) *MongoEntry {
 
 // MongoEntry will init mongo.Client with provided arguments
 type MongoEntry struct {
-	entryName        string                                 `yaml:"entryName" yaml:"entryName"`
-	entryType        string                                 `yaml:"entryType" yaml:"entryType"`
-	entryDescription string                                 `yaml:"-" json:"-"`
-	Opts             *mongoOpt.ClientOptions                `yaml:"-" json:"-"`
-	Client           *mongo.Client                          `yaml:"-" json:"-"`
-	mongoDbMap       map[string]*mongo.Database             `yaml:"-" json:"-"`
-	mongoDbOpts      map[string][]*mongoOpt.DatabaseOptions `yaml:"-" json:"-"`
-	certEntry        *rkentry.CertEntry                     `yaml:"-" json:"-"`
-	loggerEntry      *rkentry.LoggerEntry                   `yaml:"-" json:"-"`
-	pingTimeoutMs    time.Duration                          `yaml:"-" json:"-"`
-	bootstrapLogOnce sync.Once                              `json:"-" yaml:"-"`
+	entryName          string                                 `yaml:"entryName" yaml:"entryName"`
+	entryType          string                                 `yaml:"entryType" yaml:"entryType"`
+	entryDescription   string                                 `yaml:"-" json:"-"`
+	Opts               *mongoOpt.ClientOptions                `yaml:"-" json:"-"`
+	Client             *mongo.Client                          `yaml:"-" json:"-"`
+	mongoDbMap         map[string]*mongo.Database             `yaml:"-" json:"-"`
+	mongoDbOpts        map[string][]*mongoOpt.DatabaseOptions `yaml:"-" json:"-"`
+	certEntry          *rkentry.CertEntry                     `yaml:"-" json:"-"`
+	insecureSkipVerify bool                                   `yaml:"-" json:"-"`
+	loggerEntry        *rkentry.LoggerEntry                   `yaml:"-" json:"-"`
+	pingTimeoutMs      time.Duration                          `yaml:"-" json:"-"`
+	bootstrapOnce      sync.Once                              `json:"-" yaml:"-"`
 }
 
 // Bootstrap MongoEntry
 func (entry *MongoEntry) Bootstrap(ctx context.Context) {
-	entry.bootstrapLogOnce.Do(func() {
+	entry.bootstrapOnce.Do(func() {
 		// extract eventId if exists
 		fields := make([]zap.Field, 0)
 
@@ -325,6 +328,16 @@ func (entry *MongoEntry) Bootstrap(ctx context.Context) {
 			zap.String("entryType", entry.entryType))
 
 		entry.loggerEntry.Info("Bootstrap mongoDbEntry", fields...)
+
+		// enable TLS if exist
+		if entry.certEntry != nil {
+			entry.Opts.TLSConfig = &tls.Config{
+				Certificates: []tls.Certificate{
+					*entry.certEntry.Certificate,
+				},
+				InsecureSkipVerify: entry.insecureSkipVerify,
+			}
+		}
 
 		// connect to mongo
 		entry.loggerEntry.Info(fmt.Sprintf("Creating mongoDB client at %v", entry.Opts.Hosts))
@@ -449,6 +462,12 @@ func WithDescription(description string) Option {
 func WithCertEntry(in *rkentry.CertEntry) Option {
 	return func(entry *MongoEntry) {
 		entry.certEntry = in
+	}
+}
+
+func WithInsecureSkipVerify(skip bool) Option {
+	return func(entry *MongoEntry) {
+		entry.insecureSkipVerify = skip
 	}
 }
 
