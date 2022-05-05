@@ -332,10 +332,18 @@ func (entry *MongoEntry) Bootstrap(ctx context.Context) {
 		// enable TLS if exist
 		if entry.certEntry != nil {
 			entry.Opts.TLSConfig = &tls.Config{
-				Certificates: []tls.Certificate{
-					*entry.certEntry.Certificate,
-				},
+				Certificates:       make([]tls.Certificate, 0),
 				InsecureSkipVerify: entry.insecureSkipVerify,
+			}
+
+			if entry.certEntry.Certificate != nil {
+				entry.Opts.TLSConfig.Certificates = append(entry.Opts.TLSConfig.Certificates, *entry.certEntry.Certificate)
+			}
+
+			if entry.certEntry.RootCA != nil {
+				entry.Opts.TLSConfig.Certificates = append(entry.Opts.TLSConfig.Certificates, tls.Certificate{
+					Certificate: [][]byte{entry.certEntry.RootCA.Raw},
+				})
 			}
 		}
 
