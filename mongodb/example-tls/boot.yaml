@@ -12,6 +12,7 @@ mongo:
     enabled: true                               # Required
     simpleURI: "mongodb://localhost:27017"      # Required
     certEntry: my-cert
+    insecureSkipVerify: true
     database:
       - name: "users"                           # Required
 #    pingTimeoutMs: 3000                         # Optional
