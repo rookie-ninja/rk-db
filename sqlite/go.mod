@@ -3,7 +3,7 @@ module github.com/rookie-ninja/rk-db/sqlite
 go 1.17
 
 require (
-	github.com/rookie-ninja/rk-entry/v2 v2.2.1
+	github.com/rookie-ninja/rk-entry/v2 v2.2.2
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/zap v1.21.0
 	gorm.io/driver/sqlite v1.2.6
