@@ -32,7 +32,7 @@ END;
 // This must be declared in order to register registration function into rk context
 // otherwise, rk-boot won't able to bootstrap echo entry automatically from boot config file
 func init() {
-	rkentry.RegisterEntryRegFunc(RegisterSqlServerEntryYAML)
+	rkentry.RegisterPluginRegFunc(RegisterSqlServerEntryYAML)
 }
 
 // BootSqlServer entry boot config which reflects to YAML config
