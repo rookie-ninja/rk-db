@@ -265,7 +265,7 @@ func RegisterMongoEntry(opts ...Option) *MongoEntry {
 		entryName:        "MongoDB",
 		entryType:        MongoEntryType,
 		entryDescription: "Mongo entry for mongo-go-driver client",
-		loggerEntry:      rkentry.NewLoggerEntryStdout(),
+		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		mongoDbMap:       make(map[string]*mongo.Database),
 		mongoDbOpts:      make(map[string][]*mongoOpt.DatabaseOptions),
 		pingTimeoutMs:    3 * time.Second,
@@ -503,6 +503,8 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *MongoEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		} else {
+			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
 		}
 	}
 }

@@ -151,6 +151,8 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *PostgresEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		} else {
+			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
 		}
 	}
 }
@@ -223,7 +225,7 @@ func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
 		pass:             "pass",
 		Addr:             "localhost:5432",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerEntry:      rkentry.NewLoggerEntryStdout(),
+		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}

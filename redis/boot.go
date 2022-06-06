@@ -198,7 +198,7 @@ func RegisterRedisEntry(opts ...Option) *RedisEntry {
 		entryName:        "Redis",
 		entryType:        RedisEntryType,
 		entryDescription: "Redis entry for go-redis client",
-		loggerEntry:      rkentry.LoggerEntryStdout,
+		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		Opts: &redis.UniversalOptions{
 			Addrs: []string{"localhost:6379"},
 		},
@@ -397,6 +397,8 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *RedisEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		} else {
+			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
 		}
 	}
 }

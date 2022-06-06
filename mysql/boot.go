@@ -159,6 +159,8 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *MySqlEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		} else {
+			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
 		}
 	}
 }
@@ -233,7 +235,7 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 		Protocol:         "tcp",
 		Addr:             "localhost:3306",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerEntry:      rkentry.NewLoggerEntryStdout(),
+		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}

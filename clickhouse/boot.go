@@ -140,6 +140,8 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *ClickHouseEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		} else {
+			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
 		}
 	}
 }
@@ -212,7 +214,7 @@ func RegisterClickHouseEntry(opts ...Option) *ClickHouseEntry {
 		pass:             "",
 		Addr:             "localhost:9000",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerEntry:      rkentry.LoggerEntryStdout,
+		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}

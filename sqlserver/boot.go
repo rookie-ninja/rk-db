@@ -146,6 +146,8 @@ func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
 	return func(m *SqlServerEntry) {
 		if entry != nil {
 			m.loggerEntry = entry
+		} else {
+			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
 		}
 	}
 }
@@ -218,7 +220,7 @@ func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 		pass:             "pass",
 		Addr:             "localhost:1433",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerEntry:      rkentry.NewLoggerEntryStdout(),
+		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
 	}
