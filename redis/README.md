@@ -130,7 +130,11 @@ func Get(ctx *gin.Context) {
 	cmd := redisClient.Get(ctx.Request.Context(), key)
 
 	if cmd.Err() != nil {
-		ctx.JSON(http.StatusInternalServerError, cmd.Err())
+		if cmd.Err() == redis.Nil {
+			ctx.JSON(http.StatusNotFound, "Key not found!")
+		} else {
+			ctx.JSON(http.StatusInternalServerError, cmd.Err())
+		}
 		return
 	}
 
