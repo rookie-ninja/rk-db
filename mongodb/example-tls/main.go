@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot/v2"
@@ -140,9 +139,6 @@ func UpdateUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, "user not found")
 		return
 	}
-
-	bytes, _ := json.Marshal(user)
-	fmt.Println(string(bytes))
 
 	ctx.JSON(http.StatusOK, user)
 }

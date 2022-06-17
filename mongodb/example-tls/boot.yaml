@@ -1,9 +1,7 @@
 ---
 cert:
   - name: my-cert
-    certPemPath: "certs/server-cert.pem"
-    keyPemPath: "certs/server-key.pem"
-#    caPath: "certs/ca.pem"
+    caPath: "certs/mongo.pem"
 gin:
   - name: user-service
     port: 8080
