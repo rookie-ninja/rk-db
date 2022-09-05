@@ -3,7 +3,7 @@ module github.com/rookie-ninja/rk-db/mysql
 go 1.17
 
 require (
-	github.com/rookie-ninja/rk-entry/v2 v2.2.3
+	github.com/rookie-ninja/rk-entry/v2 v2.2.4
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.21.0
 	gorm.io/driver/mysql v1.2.2
