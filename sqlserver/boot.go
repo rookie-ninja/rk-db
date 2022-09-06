@@ -11,10 +11,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rookie-ninja/rk-entry/v2/entry"
+	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormLogger "gorm.io/gorm/logger"
+	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -54,7 +57,14 @@ type BootSqlServerE struct {
 		DryRun     bool     `yaml:"dryRun" json:"dryRun"`
 		AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
 	} `yaml:"database" json:"database"`
-	LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
+	Logger struct {
+		Entry                     string   `json:"entry" yaml:"entry"`
+		Level                     string   `json:"level" yaml:"level"`
+		Encoding                  string   `json:"encoding" yaml:"encoding"`
+		OutputPaths               []string `json:"outputPaths" yaml:"outputPaths"`
+		SlowThresholdMs           int      `json:"slowThresholdMs" yaml:"slowThresholdMs"`
+		IgnoreRecordNotFoundError bool     `json:"ignoreRecordNotFoundError" yaml:"ignoreRecordNotFoundError"`
+	} `json:"logger" yaml:"logger"`
 }
 
 // SqlServerEntry will init gorm.DB or SqlMock with provided arguments
@@ -64,7 +74,7 @@ type SqlServerEntry struct {
 	entryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
-	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
+	logger           *Logger                 `yaml:"-" json:"-"`
 	Addr             string                  `yaml:"addr" json:"addr"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
 	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
@@ -141,13 +151,11 @@ func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option
 	}
 }
 
-// WithLoggerEntry provide rkentry.LoggerEntry entry name
-func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
+// WithLogger provide Logger
+func WithLogger(logger *Logger) Option {
 	return func(m *SqlServerEntry) {
-		if entry != nil {
-			m.loggerEntry = entry
-		} else {
-			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
+		if logger != nil {
+			m.logger = logger
 		}
 	}
 }
@@ -188,13 +196,66 @@ func RegisterSqlServerEntryYAML(raw []byte) map[string]rkentry.Entry {
 	}
 
 	for _, element := range config.SqlServer {
+		logger := &Logger{
+			LogLevel:                  gormLogger.Warn,
+			SlowThreshold:             5000 * time.Millisecond,
+			IgnoreRecordNotFoundError: element.Logger.IgnoreRecordNotFoundError,
+		}
+
+		// configure log level
+		switch element.Logger.Level {
+		case "info":
+			logger.LogLevel = gormLogger.Info
+		case "warn":
+			logger.LogLevel = gormLogger.Warn
+		case "error":
+			logger.LogLevel = gormLogger.Error
+		case "silent":
+			logger.LogLevel = gormLogger.Silent
+		}
+
+		// configure slow threshold
+		if element.Logger.SlowThresholdMs > 0 {
+			logger.SlowThreshold = time.Duration(element.Logger.SlowThresholdMs) * time.Millisecond
+		}
+
+		// assign logger entry
+		loggerEntry := rkentry.GlobalAppCtx.GetLoggerEntry(element.Logger.Entry)
+		if loggerEntry == nil {
+			loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
+		}
+
+		// Override zap logger encoding and output path if provided by user
+		// Override encoding type
+		if element.Logger.Encoding == "json" || len(element.Logger.OutputPaths) > 0 {
+			if element.Logger.Encoding == "json" {
+				loggerEntry.LoggerConfig.Encoding = "json"
+			}
+
+			if len(element.Logger.OutputPaths) > 0 {
+				loggerEntry.LoggerConfig.OutputPaths = toAbsPath(element.Logger.OutputPaths...)
+			}
+
+			if loggerEntry.LumberjackConfig == nil {
+				loggerEntry.LumberjackConfig = rklogger.NewLumberjackConfigDefault()
+			}
+
+			if newLogger, err := rklogger.NewZapLoggerWithConf(loggerEntry.LoggerConfig, loggerEntry.LumberjackConfig); err != nil {
+				rkentry.ShutdownWithError(err)
+			} else {
+				logger.delegate = newLogger.WithOptions(zap.WithCaller(true))
+			}
+		} else {
+			logger.delegate = loggerEntry.Logger.WithOptions(zap.WithCaller(true))
+		}
+
 		opts := []Option{
 			WithName(element.Name),
 			WithDescription(element.Description),
 			WithUser(element.User),
 			WithPass(element.Pass),
 			WithAddr(element.Addr),
-			WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
+			WithLogger(logger),
 		}
 
 		// iterate database section
@@ -220,9 +281,15 @@ func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 		pass:             "pass",
 		Addr:             "localhost:1433",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
+	}
+
+	entry.logger = &Logger{
+		delegate:                  rkentry.GlobalAppCtx.GetLoggerEntryDefault().Logger,
+		SlowThreshold:             5000 * time.Millisecond,
+		LogLevel:                  gormLogger.Warn,
+		IgnoreRecordNotFoundError: false,
 	}
 
 	for i := range opts {
@@ -240,12 +307,7 @@ func RegisterSqlServerEntry(opts ...Option) *SqlServerEntry {
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: &Logger{
-				delegate:                  entry.loggerEntry.Logger,
-				SlowThreshold:             5000 * time.Millisecond,
-				LogLevel:                  logger.Warn,
-				IgnoreRecordNotFoundError: false,
-			},
+			Logger: entry.logger,
 			DryRun: innerDb.dryRun,
 		}
 	}
@@ -270,12 +332,12 @@ func (entry *SqlServerEntry) Bootstrap(ctx context.Context) {
 		zap.String("entryName", entry.entryName),
 		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Bootstrap SqlServerEntry", fields...)
+	entry.logger.delegate.Info("Bootstrap SqlServerEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
 		fields = append(fields, zap.Error(err))
-		entry.loggerEntry.Error("Failed to connect to database", fields...)
+		entry.logger.delegate.Error("Failed to connect to database", fields...)
 		rkentry.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s",
 			entry.User, "****", entry.Addr))
 	}
@@ -296,7 +358,7 @@ func (entry *SqlServerEntry) Interrupt(ctx context.Context) {
 		zap.String("entryName", entry.entryName),
 		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Interrupt SqlServerEntry", fields...)
+	entry.logger.delegate.Info("Interrupt SqlServerEntry", fields...)
 }
 
 // GetName returns entry name
@@ -351,7 +413,7 @@ func (entry *SqlServerEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
+			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
 
 			dsn := fmt.Sprintf("sqlserver://%s:%s@%s",
 				entry.User, entry.pass, entry.Addr)
@@ -371,10 +433,10 @@ func (entry *SqlServerEntry) connect() error {
 				return db.Error
 			}
 
-			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.logger.delegate.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 		params := []string{fmt.Sprintf("database=%s", innerDb.name)}
 		params = append(params, innerDb.params...)
 
@@ -389,7 +451,7 @@ func (entry *SqlServerEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.logger.delegate.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil
@@ -422,4 +484,20 @@ func GetSqlServerEntry(name string) *SqlServerEntry {
 	}
 
 	return nil
+}
+
+// Make incoming paths to absolute path with current working directory attached as prefix
+func toAbsPath(p ...string) []string {
+	res := make([]string, 0)
+
+	for i := range p {
+		if path.IsAbs(p[i]) || p[i] == "stdout" || p[i] == "stderr" {
+			res = append(res, p[i])
+			continue
+		}
+		wd, _ := os.Getwd()
+		res = append(res, path.Join(wd, p[i]))
+	}
+
+	return res
 }

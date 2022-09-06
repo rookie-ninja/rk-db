@@ -10,9 +10,15 @@ clickhouse:
     addr: "localhost:9000"                 # Optional, default: localhost:9000
     user: default                          # Optional, default: default
     pass: ""                               # Optional, default: ""
+#    logger:
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
     database:
       - name: user                         # Required
         autoCreate: true                   # Optional, default: false
 #        dryRun: false                     # Optional, default: false
 #        params: []                        # Optional, default: []
-#    loggerEntry: ""                       # Optional, default: default logger with STDOUT

@@ -18,9 +18,15 @@ mysql:
     user: root                        # Optional, default: root
     pass: pass                        # Optional, default: pass
     protocol: tcp                     # Optional, default: tcp
+#    logger:
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
     database:
       - name: demo                    # Required
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
 #        params: []                   # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]
-#    loggerEntry: ""                  # Optional, default: default logger with STDOUT

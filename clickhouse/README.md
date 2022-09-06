@@ -62,12 +62,18 @@ clickhouse:
     addr: "localhost:9000"                 # Optional, default: localhost:9000
     user: default                          # Optional, default: default
     pass: ""                               # Optional, default: ""
+#    logger:
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
     database:
       - name: user                         # Required
         autoCreate: true                   # Optional, default: false
 #        dryRun: false                     # Optional, default: false
 #        params: []                        # Optional, default: []
-#    loggerEntry: ""                       # Optional, default: default logger with STDOUT
 ```
 
 ### 2.Create main.go
@@ -281,20 +287,25 @@ success
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
-| name                           | Required | description                        | type     | default value  |
-|--------------------------------|----------|------------------------------------|----------|----------------|
-| clickhouse.name                | Required | The name of entry                  | string   | ClickHouse     |
-| clickhouse.enabled             | Required | Enable entry or not                | bool     | false          |
-| clickhouse.domain              | Optional | See locale description bellow      | string   | ""             |
-| clickhouse.description         | Optional | Description of echo entry.         | string   | ""             |
-| clickhouse.user                | Optional | ClickHouse username                | string   | root           |
-| clickhouse.pass                | Optional | ClickHouse password                | string   | pass           |
-| clickhouse.addr                | Optional | ClickHouse remote address          | string   | localhost:9000 |
-| clickhouse.database.name       | Required | Name of database                   | string   | ""             |
-| clickhouse.database.autoCreate | Optional | Create DB if missing               | bool     | false          |
-| clickhouse.database.dryRun     | Optional | Run gorm.DB with dry run mode      | bool     | false          |
-| clickhouse.database.params     | Optional | Connection params                  | []string | [""]           |
-| clickhouse.loggerEntry         | Optional | Reference of zap logger entry name | string   | ""             |
+| name                                        | Required | description                                | type     | default value  |
+|---------------------------------------------|----------|--------------------------------------------|----------|----------------|
+| clickhouse.name                             | Required | The name of entry                          | string   | ClickHouse     |
+| clickhouse.enabled                          | Required | Enable entry or not                        | bool     | false          |
+| clickhouse.domain                           | Optional | See locale description bellow              | string   | ""             |
+| clickhouse.description                      | Optional | Description of echo entry.                 | string   | ""             |
+| clickhouse.user                             | Optional | ClickHouse username                        | string   | root           |
+| clickhouse.pass                             | Optional | ClickHouse password                        | string   | pass           |
+| clickhouse.addr                             | Optional | ClickHouse remote address                  | string   | localhost:9000 |
+| clickhouse.database.name                    | Required | Name of database                           | string   | ""             |
+| clickhouse.database.autoCreate              | Optional | Create DB if missing                       | bool     | false          |
+| clickhouse.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false          |
+| clickhouse.database.params                  | Optional | Connection params                          | []string | [""]           |
+| clickhouse.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""             |
+| clickhouse.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn           |
+| clickhouse.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console        |
+| clickhouse.logger.outputPaths               | Optional | log output paths                           | []string | ["stdout"]     |
+| clickhouse.logger.slowThresholdMs           | Optional | Slow SQL threshold                         | int      | 5000           |
+| clickhouse.logger.ignoreRecordNotFoundError | Optional | As name described                          | bool     | false          |
 
 ### Usage of domain
 

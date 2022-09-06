@@ -10,9 +10,15 @@ sqlServer:
     addr: "localhost:1433"              # Optional, default: localhost:1433
     user: sa                            # Optional, default: sa
     pass: pass                          # Optional, default: pass
+#    logger:
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
     database:
       - name: user                      # Required
         autoCreate: true                # Optional, default: false
 #        dryRun: true                   # Optional, default: false
 #        params: []                     # Optional, default: []
-#    loggerEntry: ""                    # Optional, default: default logger with STDOUT

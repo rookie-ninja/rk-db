@@ -59,13 +59,19 @@ sqlite:
   - name: user-db                     # Required
     enabled: true                     # Required
     domain: "*"                       # Optional
+#    logger:
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
     database:
       - name: user                    # Required
 #        inMemory: true               # Optional, default: false
 #        dbDir: ""                    # Optional, default: "", directory where db file created or imported, can be absolute or relative path
 #        dryRun: true                 # Optional, default: false
 #        params: []                   # Optional, default: ["cache=shared"]
-#    loggerEntry: ""                  # Optional, default: default logger with STDOUT
 ```
 
 ### 2.Create main.go
@@ -289,18 +295,23 @@ success
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
-| name                     | Required | description                        | type     | default value                          |
-|--------------------------|----------|------------------------------------|----------|----------------------------------------|
-| sqlite.name              | Required | The name of entry                  | string   | SQLite                                 |
-| sqlite.enabled           | Required | Enable entry or not                | bool     | false                                  |
-| sqlite.domain            | Required | See locale description bellow      | string   | "*"                                    |
-| sqlite.description       | Optional | Description of echo entry.         | string   | ""                                     |
-| sqlite.database.name     | Required | Name of database                   | string   | ""                                     |
-| sqlite.database.inMemory | Optional | SQLite in memory                   | bool     | false                                  |
-| sqlite.database.dbDir    | Optional | Specify *.db file directory        | string   | "", current working directory if empty |
-| sqlite.database.dryRun   | Optional | Run gorm.DB with dry run mode      | bool     | false                                  |
-| sqlite.database.params   | Optional | Connection params                  | []string | ["cache=shared"]                       |
-| sqlite.logger.zapLogger  | Optional | Reference of zap logger entry name | string   | ""                                     |
+| name                                    | Required | description                                | type     | default value                          |
+|-----------------------------------------|----------|--------------------------------------------|----------|----------------------------------------|
+| sqlite.name                             | Required | The name of entry                          | string   | SQLite                                 |
+| sqlite.enabled                          | Required | Enable entry or not                        | bool     | false                                  |
+| sqlite.domain                           | Required | See locale description bellow              | string   | "*"                                    |
+| sqlite.description                      | Optional | Description of echo entry.                 | string   | ""                                     |
+| sqlite.database.name                    | Required | Name of database                           | string   | ""                                     |
+| sqlite.database.inMemory                | Optional | SQLite in memory                           | bool     | false                                  |
+| sqlite.database.dbDir                   | Optional | Specify *.db file directory                | string   | "", current working directory if empty |
+| sqlite.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false                                  |
+| sqlite.database.params                  | Optional | Connection params                          | []string | ["cache=shared"]                       |
+| sqlite.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""                                     |
+| sqlite.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn                                   |
+| sqlite.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console                                |
+| sqlite.logger.outputPaths               | Optional | log output paths                           | []string | ["stdout"]                             |
+| sqlite.logger.slowThresholdMs           | Optional | Slow SQL threshold                         | int      | 5000                                   |
+| sqlite.logger.ignoreRecordNotFoundError | Optional | As name described                          | bool     | false                                  |
 
 ### Usage of domain
 

@@ -68,7 +68,12 @@ sqlServer:
 #        dryRun: true                   # Optional, default: false
 #        params: []                     # Optional, default: []
 #    logger:
-#      zapLogger: zap                   # Optional, default: default logger with STDOUT
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
 ```
 
 ### 2.Create main.go
@@ -291,20 +296,25 @@ success
 ## YAML Options
 User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the same time. Please make sure use different names.
 
-| name                          | Required | description                        | type     | default value  |
-|-------------------------------|----------|------------------------------------|----------|----------------|
-| sqlServer.name                | Required | The name of entry                  | string   | SqlServer      |
-| sqlServer.enabled             | Required | Enable entry or not                | bool     | false          |
-| sqlServer.domain              | Required | See locale description bellow      | string   | "*"            |
-| sqlServer.description         | Optional | Description of echo entry.         | string   | ""             |
-| sqlServer.user                | Optional | SQL Server username                | string   | sa             |
-| sqlServer.pass                | Optional | SQL Server password                | string   | pass           |
-| sqlServer.addr                | Optional | SQL Server remote address          | string   | localhost:1433 |
-| sqlServer.database.name       | Required | Name of database                   | string   | ""             |
-| sqlServer.database.autoCreate | Optional | Create DB if missing               | bool     | false          |
-| sqlServer.database.dryRun     | Optional | Run gorm.DB with dry run mode      | bool     | false          |
-| sqlServer.database.params     | Optional | Connection params                  | []string | []             |
-| sqlServer.loggerEntry         | Optional | Reference of zap logger entry name | string   | ""             |
+| name                                       | Required | description                                | type     | default value  |
+|--------------------------------------------|----------|--------------------------------------------|----------|----------------|
+| sqlServer.name                             | Required | The name of entry                          | string   | SqlServer      |
+| sqlServer.enabled                          | Required | Enable entry or not                        | bool     | false          |
+| sqlServer.domain                           | Required | See locale description bellow              | string   | "*"            |
+| sqlServer.description                      | Optional | Description of echo entry.                 | string   | ""             |
+| sqlServer.user                             | Optional | SQL Server username                        | string   | sa             |
+| sqlServer.pass                             | Optional | SQL Server password                        | string   | pass           |
+| sqlServer.addr                             | Optional | SQL Server remote address                  | string   | localhost:1433 |
+| sqlServer.database.name                    | Required | Name of database                           | string   | ""             |
+| sqlServer.database.autoCreate              | Optional | Create DB if missing                       | bool     | false          |
+| sqlServer.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false          |
+| sqlServer.database.params                  | Optional | Connection params                          | []string | []             |
+| sqlServer.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""             |
+| sqlServer.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn           |
+| sqlServer.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console        |
+| sqlServer.logger.outputPaths               | Optional | log output paths                           | []string | ["stdout"]     |
+| sqlServer.logger.slowThresholdMs           | Optional | Slow SQL threshold                         | int      | 5000           |
+| sqlServer.logger.ignoreRecordNotFoundError | Optional | As name described                          | bool     | false          |
 
 ### Usage of domain
 

@@ -10,10 +10,15 @@ postgres:
     addr: "localhost:5432"            # Optional, default: localhost:5432
     user: postgres                    # Optional, default: postgres
     pass: pass                        # Optional, default: pass
+#      entry: ""
+#      level: info
+#      encoding: json
+#      outputPaths: [ "stdout", "log/db.log" ]
+#      slowThresholdMs: 5000
+#      ignoreRecordNotFoundError: false
     database:
       - name: user                    # Required
         autoCreate: true              # Optional, default: false
 #        dryRun: true                 # Optional, default: false
 #        preferSimpleProtocol: false  # Optional, default: false
 #        params: []                   # Optional, default: ["sslmode=disable","TimeZone=Asia/Shanghai"]
-#    loggerEntry: ""                  # Optional, default: default logger with STDOUT

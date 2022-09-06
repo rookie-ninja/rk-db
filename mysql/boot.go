@@ -11,10 +11,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rookie-ninja/rk-entry/v2/entry"
+	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormLogger "gorm.io/gorm/logger"
+	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -48,7 +51,14 @@ type BootMySQLE struct {
 		DryRun     bool     `yaml:"dryRun" json:"dryRun"`
 		AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
 	} `yaml:"database" json:"database"`
-	LoggerEntry string `yaml:"loggerEntry" json:"loggerEntry"`
+	Logger struct {
+		Entry                     string   `json:"entry" yaml:"entry"`
+		Level                     string   `json:"level" yaml:"level"`
+		Encoding                  string   `json:"encoding" yaml:"encoding"`
+		OutputPaths               []string `json:"outputPaths" yaml:"outputPaths"`
+		SlowThresholdMs           int      `json:"slowThresholdMs" yaml:"slowThresholdMs"`
+		IgnoreRecordNotFoundError bool     `json:"ignoreRecordNotFoundError" yaml:"ignoreRecordNotFoundError"`
+	} `json:"logger" yaml:"logger"`
 }
 
 // MySqlEntry will init gorm.DB or SqlMock with provided arguments
@@ -58,7 +68,7 @@ type MySqlEntry struct {
 	entryDescription string                  `yaml:"-" json:"-"`
 	User             string                  `yaml:"user" json:"user"`
 	pass             string                  `yaml:"-" json:"-"`
-	loggerEntry      *rkentry.LoggerEntry    `yaml:"-" json:"-"`
+	logger           *Logger                 `yaml:"-" json:"-"`
 	Protocol         string                  `yaml:"protocol" json:"protocol"`
 	Addr             string                  `yaml:"addr" json:"addr"`
 	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
@@ -154,13 +164,11 @@ func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option
 	}
 }
 
-// WithLoggerEntry provide rkentry.LoggerEntry entry name
-func WithLoggerEntry(entry *rkentry.LoggerEntry) Option {
+// WithLogger provide Logger
+func WithLogger(logger *Logger) Option {
 	return func(m *MySqlEntry) {
-		if entry != nil {
-			m.loggerEntry = entry
-		} else {
-			m.loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
+		if logger != nil {
+			m.logger = logger
 		}
 	}
 }
@@ -201,6 +209,59 @@ func RegisterMySqlEntryYAML(raw []byte) map[string]rkentry.Entry {
 	}
 
 	for _, element := range configMap {
+		logger := &Logger{
+			LogLevel:                  gormLogger.Warn,
+			SlowThreshold:             5000 * time.Millisecond,
+			IgnoreRecordNotFoundError: element.Logger.IgnoreRecordNotFoundError,
+		}
+
+		// configure log level
+		switch element.Logger.Level {
+		case "info":
+			logger.LogLevel = gormLogger.Info
+		case "warn":
+			logger.LogLevel = gormLogger.Warn
+		case "error":
+			logger.LogLevel = gormLogger.Error
+		case "silent":
+			logger.LogLevel = gormLogger.Silent
+		}
+
+		// configure slow threshold
+		if element.Logger.SlowThresholdMs > 0 {
+			logger.SlowThreshold = time.Duration(element.Logger.SlowThresholdMs) * time.Millisecond
+		}
+
+		// assign logger entry
+		loggerEntry := rkentry.GlobalAppCtx.GetLoggerEntry(element.Logger.Entry)
+		if loggerEntry == nil {
+			loggerEntry = rkentry.GlobalAppCtx.GetLoggerEntryDefault()
+		}
+
+		// Override zap logger encoding and output path if provided by user
+		// Override encoding type
+		if element.Logger.Encoding == "json" || len(element.Logger.OutputPaths) > 0 {
+			if element.Logger.Encoding == "json" {
+				loggerEntry.LoggerConfig.Encoding = "json"
+			}
+
+			if len(element.Logger.OutputPaths) > 0 {
+				loggerEntry.LoggerConfig.OutputPaths = toAbsPath(element.Logger.OutputPaths...)
+			}
+
+			if loggerEntry.LumberjackConfig == nil {
+				loggerEntry.LumberjackConfig = rklogger.NewLumberjackConfigDefault()
+			}
+
+			if newLogger, err := rklogger.NewZapLoggerWithConf(loggerEntry.LoggerConfig, loggerEntry.LumberjackConfig); err != nil {
+				rkentry.ShutdownWithError(err)
+			} else {
+				logger.delegate = newLogger.WithOptions(zap.WithCaller(true))
+			}
+		} else {
+			logger.delegate = loggerEntry.Logger.WithOptions(zap.WithCaller(true))
+		}
+
 		opts := []Option{
 			WithName(element.Name),
 			WithDescription(element.Description),
@@ -208,7 +269,7 @@ func RegisterMySqlEntryYAML(raw []byte) map[string]rkentry.Entry {
 			WithPass(element.Pass),
 			WithProtocol(element.Protocol),
 			WithAddr(element.Addr),
-			WithLoggerEntry(rkentry.GlobalAppCtx.GetLoggerEntry(element.LoggerEntry)),
+			WithLogger(logger),
 		}
 
 		// iterate database section
@@ -235,9 +296,15 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 		Protocol:         "tcp",
 		Addr:             "localhost:3306",
 		innerDbList:      make([]*databaseInner, 0),
-		loggerEntry:      rkentry.GlobalAppCtx.GetLoggerEntryDefault(),
 		GormDbMap:        make(map[string]*gorm.DB),
 		GormConfigMap:    make(map[string]*gorm.Config),
+	}
+
+	entry.logger = &Logger{
+		delegate:                  rkentry.GlobalAppCtx.GetLoggerEntryDefault().Logger,
+		SlowThreshold:             5000 * time.Millisecond,
+		LogLevel:                  gormLogger.Warn,
+		IgnoreRecordNotFoundError: false,
 	}
 
 	for i := range opts {
@@ -255,12 +322,7 @@ func RegisterMySqlEntry(opts ...Option) *MySqlEntry {
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: &Logger{
-				delegate:                  entry.loggerEntry.Logger,
-				SlowThreshold:             5000 * time.Millisecond,
-				LogLevel:                  logger.Warn,
-				IgnoreRecordNotFoundError: false,
-			},
+			Logger: entry.logger,
 			DryRun: innerDb.dryRun,
 		}
 	}
@@ -285,12 +347,12 @@ func (entry *MySqlEntry) Bootstrap(ctx context.Context) {
 		zap.String("entryName", entry.entryName),
 		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Bootstrap MySqlEntry", fields...)
+	entry.logger.delegate.Info("Bootstrap MySqlEntry", fields...)
 
 	// Connect and create db if missing
 	if err := entry.connect(); err != nil {
 		fields = append(fields, zap.Error(err))
-		entry.loggerEntry.Error("Failed to connect to database", fields...)
+		entry.logger.delegate.Error("Failed to connect to database", fields...)
 		rkentry.ShutdownWithError(fmt.Errorf("failed to connect to database at %s:%s@%s(%s)",
 			entry.User, "****", entry.Protocol, entry.Addr))
 	}
@@ -311,7 +373,7 @@ func (entry *MySqlEntry) Interrupt(ctx context.Context) {
 		zap.String("entryName", entry.entryName),
 		zap.String("entryType", entry.entryType))
 
-	entry.loggerEntry.Info("Interrupt MySqlEntry", fields...)
+	entry.logger.delegate.Info("Interrupt MySqlEntry", fields...)
 }
 
 // GetName returns entry name
@@ -368,7 +430,7 @@ func (entry *MySqlEntry) connect() error {
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
+			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s]", innerDb.name))
 
 			dsn := fmt.Sprintf("%s:%s@%s(%s)/?%s",
 				entry.User, entry.pass, entry.Protocol, entry.Addr, sqlParams)
@@ -390,10 +452,10 @@ func (entry *MySqlEntry) connect() error {
 			if db.Error != nil {
 				return db.Error
 			}
-			entry.loggerEntry.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
-		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
+		entry.logger.delegate.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 		dsn := fmt.Sprintf("%s:%s@%s(%s)/%s?%s",
 			entry.User, entry.pass, entry.Protocol, entry.Addr, innerDb.name, sqlParams)
 
@@ -405,7 +467,7 @@ func (entry *MySqlEntry) connect() error {
 		}
 
 		entry.GormDbMap[innerDb.name] = db
-		entry.loggerEntry.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
+		entry.logger.delegate.Info(fmt.Sprintf("Connecting to database [%s] success", innerDb.name))
 	}
 
 	return nil
@@ -420,4 +482,20 @@ func GetMySqlEntry(name string) *MySqlEntry {
 	}
 
 	return nil
+}
+
+// Make incoming paths to absolute path with current working directory attached as prefix
+func toAbsPath(p ...string) []string {
+	res := make([]string, 0)
+
+	for i := range p {
+		if path.IsAbs(p[i]) || p[i] == "stdout" || p[i] == "stderr" {
+			res = append(res, p[i])
+			continue
+		}
+		wd, _ := os.Getwd()
+		res = append(res, path.Join(wd, p[i]))
+	}
+
+	return res
 }
