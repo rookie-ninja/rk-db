@@ -3,8 +3,15 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
+    middleware:
+      meta:
+        enabled: true
+      logging:
+        enabled: true
+      trace:
+        enabled: true
 mysql:
-  - name: user-db                     # Required
+  - name: demo-db                     # Required
     enabled: true                     # Required
     domain: "*"                       # Optional
     addr: "localhost:3306"            # Optional, default: localhost:3306
@@ -12,7 +19,7 @@ mysql:
     pass: pass                        # Optional, default: pass
     protocol: tcp                     # Optional, default: tcp
     database:
-      - name: user                    # Required
+      - name: demo                    # Required
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
 #        params: []                   # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]

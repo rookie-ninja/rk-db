@@ -9,7 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/mysql"
+	rkmid "github.com/rookie-ninja/rk-entry/v2/middleware"
 	"github.com/rookie-ninja/rk-gin/v2/boot"
+	rkginctx "github.com/rookie-ninja/rk-gin/v2/middleware/context"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -26,8 +28,8 @@ func main() {
 	boot.Bootstrap(context.TODO())
 
 	// Auto migrate database and init global userDb variable
-	mysqlEntry := rkmysql.GetMySqlEntry("user-db")
-	userDb = mysqlEntry.GetDB("user")
+	mysqlEntry := rkmysql.GetMySqlEntry("demo-db")
+	userDb = mysqlEntry.GetDB("demo")
 	model = User{}
 
 	if !userDb.DryRun {
@@ -72,7 +74,9 @@ type User struct {
 
 func ListUsers(ctx *gin.Context) {
 	userList := make([]User, 0)
-	res := userDb.Find(&userList)
+
+	dbCtx := context.WithValue(ctx, rkmid.LoggerKey.String(), rkginctx.GetLogger(ctx))
+	res := userDb.WithContext(dbCtx).Find(&userList)
 
 	if res.Error != nil {
 		ctx.JSON(http.StatusInternalServerError, res.Error)

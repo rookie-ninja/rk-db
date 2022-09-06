@@ -234,12 +234,12 @@ func RegisterClickHouseEntry(opts ...Option) *ClickHouseEntry {
 	// create default gorm configs for databases
 	for _, innerDb := range entry.innerDbList {
 		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: logger.New(NewLogger(entry.loggerEntry.Logger), logger.Config{
-				SlowThreshold:             5 * time.Second,
+			Logger: &Logger{
+				delegate:                  entry.loggerEntry.Logger,
+				SlowThreshold:             5000 * time.Millisecond,
 				LogLevel:                  logger.Warn,
 				IgnoreRecordNotFoundError: false,
-				Colorful:                  false,
-			}),
+			},
 			DryRun: innerDb.dryRun,
 		}
 	}
