@@ -10,6 +10,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rookie-ninja/rk-db/mysql/plugins"
 	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"github.com/rookie-ninja/rk-logger"
 	"go.uber.org/zap"
@@ -50,6 +52,9 @@ type BootMySQLE struct {
 		Params     []string `yaml:"params" json:"params"`
 		DryRun     bool     `yaml:"dryRun" json:"dryRun"`
 		AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
+		Plugins    struct {
+			Prom plugins.PromConfig `yaml:"prom"`
+		} `yaml:"plugins" json:"plugins"`
 	} `yaml:"database" json:"database"`
 	Logger struct {
 		Entry                     string   `json:"entry" yaml:"entry"`
@@ -81,6 +86,7 @@ type databaseInner struct {
 	dryRun     bool
 	autoCreate bool
 	params     []string
+	plugins    []gorm.Plugin
 }
 
 // Option for MySqlEntry
@@ -161,6 +167,20 @@ func WithDatabase(name string, dryRun, autoCreate bool, params ...string) Option
 		}
 
 		m.innerDbList = append(m.innerDbList, innerDb)
+	}
+}
+
+func WithPlugin(name string, plugin gorm.Plugin) Option {
+	return func(entry *MySqlEntry) {
+		if name == "" || plugin == nil {
+			return
+		}
+		for i := range entry.innerDbList {
+			inner := entry.innerDbList[i]
+			if inner.name == name {
+				inner.plugins = append(inner.plugins, plugin)
+			}
+		}
 	}
 }
 
@@ -275,6 +295,14 @@ func RegisterMySqlEntryYAML(raw []byte) map[string]rkentry.Entry {
 		// iterate database section
 		for _, db := range element.Database {
 			opts = append(opts, WithDatabase(db.Name, db.DryRun, db.AutoCreate, db.Params...))
+
+			if db.Plugins.Prom.Enabled {
+				db.Plugins.Prom.DbAddr = element.Addr
+				db.Plugins.Prom.DbName = db.Name
+				db.Plugins.Prom.DbType = "mysql"
+				prom := plugins.NewProm(&db.Plugins.Prom)
+				opts = append(opts, WithPlugin(db.Name, prom))
+			}
 		}
 
 		entry := RegisterMySqlEntry(opts...)
@@ -416,6 +444,42 @@ func (entry *MySqlEntry) IsHealthy() bool {
 	return true
 }
 
+func (entry *MySqlEntry) RegisterPromMetrics(registry *prometheus.Registry) error {
+	for i := range entry.innerDbList {
+		innerDb := entry.innerDbList[i]
+		for j := range innerDb.plugins {
+			p := innerDb.plugins[j]
+			if v, ok := p.(*plugins.Prom); ok {
+				gaugeList := v.MetricsSet.ListGauges()
+				for k := range gaugeList {
+					if err := registry.Register(gaugeList[k]); err != nil {
+						return err
+					}
+				}
+				counterList := v.MetricsSet.ListCounters()
+				for k := range counterList {
+					if err := registry.Register(counterList[k]); err != nil {
+						return err
+					}
+				}
+				summaryList := v.MetricsSet.ListSummaries()
+				for k := range summaryList {
+					if err := registry.Register(summaryList[k]); err != nil {
+						return err
+					}
+				}
+				hisList := v.MetricsSet.ListHistograms()
+				for k := range hisList {
+					if err := registry.Register(hisList[k]); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (entry *MySqlEntry) GetDB(name string) *gorm.DB {
 	return entry.GormDbMap[name]
 }
@@ -464,6 +528,12 @@ func (entry *MySqlEntry) connect() error {
 		// failed to connect to database
 		if err != nil {
 			return err
+		}
+
+		for i := range innerDb.plugins {
+			if err := db.Use(innerDb.plugins[i]); err != nil {
+				return err
+			}
 		}
 
 		entry.GormDbMap[innerDb.name] = db

@@ -311,6 +311,7 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | postgres.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false                                        |
 | postgres.database.preferSimpleProtocol    | Optional | Disable prepared statement cache           | bool     | false                                        |
 | postgres.database.params                  | Optional | Connection params                          | []string | ["sslmode=disable","TimeZone=Asia/Shanghai"] |
+| postgres.database.plugins.prom.enabled    | Optional | Enable prometheus plugin                   | bool     | false                                        |
 | postgres.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""                                           |
 | postgres.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn                                         |
 | postgres.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console                                      |

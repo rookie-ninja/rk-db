@@ -3,6 +3,15 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
+    prom:
+      enabled: true
+    middleware:
+      meta:
+        enabled: true
+      logging:
+        enabled: true
+      trace:
+        enabled: true
 sqlite:
   - name: user-db                     # Required
     enabled: true                     # Required
@@ -16,6 +25,9 @@ sqlite:
 #      ignoreRecordNotFoundError: false
     database:
       - name: user                    # Required
+        plugins:
+          prom:
+            enabled: true
 #        inMemory: true               # Optional, default: false
 #        dbDir: ""                    # Optional, default: "", directory where db file created or imported, can be absolute or relative path
 #        dryRun: true                 # Optional, default: false

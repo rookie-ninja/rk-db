@@ -298,6 +298,7 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | mysql.database.autoCreate              | Optional | Create DB if missing                       | bool     | false                                            |
 | mysql.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false                                            |
 | mysql.database.params                  | Optional | Connection params                          | []string | ["charset=utf8mb4","parseTime=True","loc=Local"] |
+| mysql.database.plugins.prom.enabled    | Optional | Enable prometheus plugin                   | bool     | false                                            |
 | mysql.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""                                               |
 | mysql.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn                                             |
 | mysql.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console                                          |

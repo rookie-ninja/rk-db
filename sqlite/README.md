@@ -306,6 +306,7 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | sqlite.database.dbDir                   | Optional | Specify *.db file directory                | string   | "", current working directory if empty |
 | sqlite.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false                                  |
 | sqlite.database.params                  | Optional | Connection params                          | []string | ["cache=shared"]                       |
+| sqlite.database.plugins.prom.enabled    | Optional | Enable prometheus plugin                   | bool     | false                                  |
 | sqlite.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""                                     |
 | sqlite.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn                                   |
 | sqlite.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console                                |

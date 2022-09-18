@@ -3,6 +3,8 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
+    prom:
+      enabled: true
     middleware:
       meta:
         enabled: true
@@ -18,15 +20,18 @@ mysql:
     user: root                        # Optional, default: root
     pass: pass                        # Optional, default: pass
     protocol: tcp                     # Optional, default: tcp
-#    logger:
-#      entry: ""
-#      level: info
+    logger:
+      entry: ""
+      level: warn
 #      encoding: json
 #      outputPaths: [ "stdout", "log/db.log" ]
 #      slowThresholdMs: 5000
 #      ignoreRecordNotFoundError: false
     database:
       - name: demo                    # Required
+        plugins:
+          prom:
+            enabled: true
         autoCreate: true              # Optional, default: false
 #        dryRun: false                # Optional, default: false
 #        params: []                   # Optional, default: ["charset=utf8mb4","parseTime=True","loc=Local"]

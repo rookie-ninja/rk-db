@@ -32,6 +32,8 @@ func main() {
 
 	// Register APIs
 	ginEntry := rkgin.GetGinEntry("user-service")
+	sqliteEntry.RegisterPromMetrics(ginEntry.PromEntry.Registry)
+
 	ginEntry.Router.GET("/v1/user", ListUsers)
 	ginEntry.Router.GET("/v1/user/:id", GetUser)
 	ginEntry.Router.PUT("/v1/user", CreateUser)

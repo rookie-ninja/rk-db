@@ -309,6 +309,7 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | sqlServer.database.autoCreate              | Optional | Create DB if missing                       | bool     | false          |
 | sqlServer.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false          |
 | sqlServer.database.params                  | Optional | Connection params                          | []string | []             |
+| sqlServer.database.plugins.prom.enabled    | Optional | Enable prometheus plugin                   | bool     | false          |
 | sqlServer.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""             |
 | sqlServer.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn           |
 | sqlServer.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console        |

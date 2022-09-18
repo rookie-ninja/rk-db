@@ -18,8 +18,6 @@ import (
 	"time"
 )
 
-var model interface{}
-
 var userDb *gorm.DB
 
 func main() {
@@ -30,23 +28,15 @@ func main() {
 	// Auto migrate database and init global userDb variable
 	mysqlEntry := rkmysql.GetMySqlEntry("demo-db")
 	userDb = mysqlEntry.GetDB("demo")
-	model = User{}
 
 	if !userDb.DryRun {
 		userDb.AutoMigrate(&User{})
 	}
 
-	db, _ := userDb.DB()
-	res, _ := db.Query("SHOW TABLES")
-
-	var table string
-
-	for res.Next() {
-		res.Scan(&table)
-	}
-
 	// Register APIs
 	ginEntry := rkgin.GetGinEntry("user-service")
+	mysqlEntry.RegisterPromMetrics(ginEntry.PromEntry.Registry)
+
 	ginEntry.Router.GET("/v1/user", ListUsers)
 	ginEntry.Router.GET("/v1/user/:id", GetUser)
 	ginEntry.Router.PUT("/v1/user", CreateUser)

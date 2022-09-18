@@ -4,9 +4,9 @@ go 1.17
 
 require (
 	github.com/gin-gonic/gin v1.8.0
-	github.com/rookie-ninja/rk-boot/v2 v2.2.3
+	github.com/rookie-ninja/rk-boot/v2 v2.2.5
 	github.com/rookie-ninja/rk-db/postgres v0.0.0
-	github.com/rookie-ninja/rk-gin/v2 v2.2.5
+	github.com/rookie-ninja/rk-gin/v2 v2.2.7
 	gorm.io/gorm v1.23.8
 )
 
@@ -36,7 +36,7 @@ require (
 	github.com/jackc/pgtype v1.11.0 // indirect
 	github.com/jackc/pgx/v4 v4.16.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.4 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect

@@ -300,6 +300,7 @@ User can start multiple [gorm](https://github.com/go-gorm/gorm) instances at the
 | clickhouse.database.autoCreate              | Optional | Create DB if missing                       | bool     | false          |
 | clickhouse.database.dryRun                  | Optional | Run gorm.DB with dry run mode              | bool     | false          |
 | clickhouse.database.params                  | Optional | Connection params                          | []string | [""]           |
+| clickhouse.database.plugins.prom.enabled    | Optional | Enable prometheus plugin                   | bool     | false          |
 | clickhouse.logger.entry                     | Optional | Reference of zap logger entry name         | string   | ""             |
 | clickhouse.logger.level                     | Optional | Logging level, [info, warn, error, silent] | string   | warn           |
 | clickhouse.logger.encoding                  | Optional | log encoding, [console, json]              | string   | console        |

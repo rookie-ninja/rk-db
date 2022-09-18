@@ -3,6 +3,15 @@ gin:
   - name: user-service
     port: 8080
     enabled: true
+    prom:
+      enabled: true
+    middleware:
+      meta:
+        enabled: true
+      logging:
+        enabled: true
+      trace:
+        enabled: true
 postgres:
   - name: user-db                     # Required
     enabled: true                     # Required
@@ -19,6 +28,9 @@ postgres:
     database:
       - name: user                    # Required
         autoCreate: true              # Optional, default: false
+        plugins:
+          prom:
+            enabled: true
 #        dryRun: true                 # Optional, default: false
 #        preferSimpleProtocol: false  # Optional, default: false
 #        params: []                   # Optional, default: ["sslmode=disable","TimeZone=Asia/Shanghai"]
