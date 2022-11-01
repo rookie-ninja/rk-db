@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -561,12 +561,12 @@ func toAbsPath(p ...string) []string {
 	res := make([]string, 0)
 
 	for i := range p {
-		if path.IsAbs(p[i]) || p[i] == "stdout" || p[i] == "stderr" {
+		if filepath.IsAbs(p[i]) || p[i] == "stdout" || p[i] == "stderr" {
 			res = append(res, p[i])
 			continue
 		}
 		wd, _ := os.Getwd()
-		res = append(res, path.Join(wd, p[i]))
+		res = append(res, filepath.Join(wd, p[i]))
 	}
 
 	return res

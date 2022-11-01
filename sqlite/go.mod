@@ -4,12 +4,12 @@ go 1.17
 
 require (
 	github.com/prometheus/client_golang v1.12.2
-	github.com/rookie-ninja/rk-entry/v2 v2.2.9
+	github.com/rookie-ninja/rk-entry/v2 v2.2.10
 	github.com/rookie-ninja/rk-logger v1.2.12
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.21.0
-	gorm.io/driver/sqlite v1.3.6
-	gorm.io/gorm v1.23.8
+	gorm.io/driver/sqlite v1.4.3
+	gorm.io/gorm v1.24.0
 )
 
 require (
@@ -24,7 +24,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
-	github.com/mattn/go-sqlite3 v1.14.12 // indirect
+	github.com/mattn/go-sqlite3 v1.14.15 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect

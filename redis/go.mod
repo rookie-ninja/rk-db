@@ -3,9 +3,9 @@ module github.com/rookie-ninja/rk-db/redis
 go 1.17
 
 require (
-	github.com/go-redis/redis/extra/rediscmd/v8 v8.11.4
-	github.com/go-redis/redis/v8 v8.11.4
-	github.com/rookie-ninja/rk-entry/v2 v2.2.9
+	github.com/go-redis/redis/extra/rediscmd/v8 v8.11.5
+	github.com/go-redis/redis/v8 v8.11.5
+	github.com/rookie-ninja/rk-entry/v2 v2.2.10
 	github.com/stretchr/testify v1.7.1
 	go.opentelemetry.io/otel v1.10.0
 	go.opentelemetry.io/otel/trace v1.10.0
@@ -25,7 +25,6 @@ require (
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
