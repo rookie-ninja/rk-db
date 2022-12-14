@@ -1,11 +1,11 @@
 module github.com/rookie-ninja/rk-db/redis
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-redis/redis/extra/rediscmd/v8 v8.11.5
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/rookie-ninja/rk-entry/v2 v2.2.11
+	github.com/rookie-ninja/rk-entry/v2 v2.2.13
 	github.com/stretchr/testify v1.8.0
 	go.opentelemetry.io/otel v1.10.0
 	go.opentelemetry.io/otel/trace v1.10.0

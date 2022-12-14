@@ -1,9 +1,9 @@
 module github.com/rookie-ninja/rk-db/mongodb
 
-go 1.17
+go 1.18
 
 require (
-	github.com/rookie-ninja/rk-entry/v2 v2.2.11
+	github.com/rookie-ninja/rk-entry/v2 v2.2.13
 	github.com/stretchr/testify v1.8.0
 	go.mongodb.org/mongo-driver v1.10.3
 	go.uber.org/zap v1.21.0
