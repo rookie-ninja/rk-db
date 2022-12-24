@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/go-redis/redis/extra/rediscmd/v8 v8.11.5
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/rookie-ninja/rk-entry/v2 v2.2.14
+	github.com/rookie-ninja/rk-entry/v2 v2.2.15
 	github.com/stretchr/testify v1.8.0
 	go.opentelemetry.io/otel v1.10.0
 	go.opentelemetry.io/otel/trace v1.10.0
