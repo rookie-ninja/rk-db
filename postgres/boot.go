@@ -90,112 +90,29 @@ type databaseInner struct {
 	plugins              []gorm.Plugin
 }
 
-// Option will be extended in the future.
-type Option func(*PostgresEntry)
-
-// WithName provide name.
-func WithName(name string) Option {
-	return func(entry *PostgresEntry) {
-		entry.entryName = name
-	}
-}
-
-// WithDescription provide name.
-func WithDescription(description string) Option {
-	return func(entry *PostgresEntry) {
-		entry.entryDescription = description
-	}
-}
-
-// WithUser provide user
-func WithUser(user string) Option {
-	return func(m *PostgresEntry) {
-		if len(user) > 0 {
-			m.User = user
-		}
-	}
-}
-
-// WithPass provide password
-func WithPass(pass string) Option {
-	return func(m *PostgresEntry) {
-		if len(pass) > 0 {
-			m.pass = pass
-		}
-	}
-}
-
-// WithAddr provide address
-func WithAddr(addr string) Option {
-	return func(m *PostgresEntry) {
-		if len(addr) > 0 {
-			m.Addr = addr
-		}
-	}
-}
-
-// WithDatabase provide database
-func WithDatabase(name string, dryRun, autoCreate, preferSimpleProtocol bool, params ...string) Option {
-	return func(m *PostgresEntry) {
-		if len(name) < 1 {
-			return
-		}
-
-		innerDb := &databaseInner{
-			name:                 name,
-			dryRun:               dryRun,
-			autoCreate:           autoCreate,
-			preferSimpleProtocol: preferSimpleProtocol,
-			params:               make([]string, 0),
-		}
-
-		// add default params if no param provided
-		if len(params) < 1 {
-			innerDb.params = append(innerDb.params,
-				"sslmode=disable",
-				"TimeZone=Asia/Shanghai")
-		} else {
-			innerDb.params = append(innerDb.params, params...)
-		}
-
-		m.innerDbList = append(m.innerDbList, innerDb)
-	}
-}
-
-func WithPlugin(name string, plugin gorm.Plugin) Option {
-	return func(entry *PostgresEntry) {
-		if name == "" || plugin == nil {
-			return
-		}
-		for i := range entry.innerDbList {
-			inner := entry.innerDbList[i]
-			if inner.name == name {
-				inner.plugins = append(inner.plugins, plugin)
-			}
-		}
-	}
-}
-
-// WithLogger provide Logger
-func WithLogger(logger *Logger) Option {
-	return func(m *PostgresEntry) {
-		if logger != nil {
-			m.logger = logger
-		}
-	}
-}
-
 // RegisterPostgresEntryYAML register PostgresEntry based on config file into rkentry.GlobalAppCtx
 func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
-	res := make(map[string]rkentry.Entry)
-
 	// 1: unmarshal user provided config into boot config struct
 	config := &BootPostgres{}
 	rkentry.UnmarshalBootYAML(raw, config)
 
+	res := make(map[string]rkentry.Entry)
+
+	entries := RegisterPostgresEntry(config)
+	for i := range entries {
+		entry := entries[i]
+		res[entry.GetName()] = entry
+	}
+
+	return res
+}
+
+func RegisterPostgresEntry(boot *BootPostgres) []*PostgresEntry {
+	res := make([]*PostgresEntry, 0)
+
 	// filter out based domain
 	configMap := make(map[string]*BootPostgresE)
-	for _, e := range config.Postgres {
+	for _, e := range boot.Postgres {
 		if !e.Enabled || len(e.Name) < 1 {
 			continue
 		}
@@ -274,80 +191,81 @@ func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
 			logger.delegate = loggerEntry.Logger.WithOptions(zap.WithCaller(true))
 		}
 
-		opts := []Option{
-			WithName(element.Name),
-			WithDescription(element.Description),
-			WithUser(element.User),
-			WithPass(element.Pass),
-			WithAddr(element.Addr),
-			WithLogger(logger),
+		entry := &PostgresEntry{
+			entryName:     element.Name,
+			entryType:     PostgreSqlEntry,
+			User:          element.User,
+			pass:          element.Pass,
+			Addr:          element.Addr,
+			innerDbList:   make([]*databaseInner, 0),
+			GormDbMap:     make(map[string]*gorm.DB),
+			GormConfigMap: make(map[string]*gorm.Config),
+			logger:        logger,
 		}
 
 		// iterate database section
 		for _, db := range element.Database {
-			opts = append(opts, WithDatabase(db.Name, db.DryRun, db.AutoCreate, db.PreferSimpleProtocol, db.Params...))
+			// init inner db
+			if len(db.Name) < 1 {
+				continue
+			}
+
+			innerDb := &databaseInner{
+				name:                 db.Name,
+				dryRun:               db.DryRun,
+				autoCreate:           db.AutoCreate,
+				preferSimpleProtocol: db.PreferSimpleProtocol,
+				params:               make([]string, 0),
+			}
+
+			// add default params if no param provided
+			if len(db.Params) < 1 {
+				innerDb.params = append(innerDb.params,
+					"sslmode=disable",
+					"TimeZone=Asia/Shanghai")
+			} else {
+				innerDb.params = append(innerDb.params, db.Params...)
+			}
+
+			entry.innerDbList = append(entry.innerDbList, innerDb)
 
 			if db.Plugins.Prom.Enabled {
 				db.Plugins.Prom.DbAddr = element.Addr
 				db.Plugins.Prom.DbName = db.Name
 				db.Plugins.Prom.DbType = "postgresql"
 				prom := plugins.NewProm(&db.Plugins.Prom)
-				opts = append(opts, WithPlugin(db.Name, prom))
+				innerDb.plugins = append(innerDb.plugins, prom)
 			}
 		}
 
-		entry := RegisterPostgresEntry(opts...)
+		if len(entry.User) < 1 {
+			entry.User = "postgres"
+		}
+		if len(entry.pass) < 1 {
+			entry.pass = "pass"
+		}
+		if len(entry.Addr) < 1 {
+			entry.Addr = "localhost:5432"
+		}
+		if len(entry.entryDescription) < 1 {
+			entry.entryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
+				entry.entryType,
+				entry.entryName,
+				entry.Addr,
+				entry.User)
+		}
+		for _, innerDb := range entry.innerDbList {
+			entry.GormConfigMap[innerDb.name] = &gorm.Config{
+				Logger: entry.logger,
+				DryRun: innerDb.dryRun,
+			}
+		}
 
-		res[element.Name] = entry
+		rkentry.GlobalAppCtx.AddEntry(entry)
+		res = append(res, entry)
 	}
 
 	return res
-}
-
-// RegisterPostgresEntry will register Entry into GlobalAppCtx
-func RegisterPostgresEntry(opts ...Option) *PostgresEntry {
-	entry := &PostgresEntry{
-		entryName:        "PostgreSQL",
-		entryType:        PostgreSqlEntry,
-		entryDescription: "PostgreSQL entry for gorm.DB",
-		User:             "postgres",
-		pass:             "pass",
-		Addr:             "localhost:5432",
-		innerDbList:      make([]*databaseInner, 0),
-		GormDbMap:        make(map[string]*gorm.DB),
-		GormConfigMap:    make(map[string]*gorm.Config),
-	}
-
-	entry.logger = &Logger{
-		delegate:                  rkentry.GlobalAppCtx.GetLoggerEntryDefault().Logger,
-		SlowThreshold:             5000 * time.Millisecond,
-		LogLevel:                  gormLogger.Warn,
-		IgnoreRecordNotFoundError: false,
-	}
-
-	for i := range opts {
-		opts[i](entry)
-	}
-
-	if len(entry.entryDescription) < 1 {
-		entry.entryDescription = fmt.Sprintf("%s entry with name of %s, addr:%s, user:%s",
-			entry.entryType,
-			entry.entryName,
-			entry.Addr,
-			entry.User)
-	}
-
-	// create default gorm configs for databases
-	for _, innerDb := range entry.innerDbList {
-		entry.GormConfigMap[innerDb.name] = &gorm.Config{
-			Logger: entry.logger,
-			DryRun: innerDb.dryRun,
-		}
-	}
-
-	rkentry.GlobalAppCtx.AddEntry(entry)
-
-	return entry
 }
 
 // Bootstrap PostgresEntry
