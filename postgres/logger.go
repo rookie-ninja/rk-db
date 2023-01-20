@@ -51,8 +51,14 @@ func (l *Logger) Info(ctx context.Context, msg string, data ...interface{}) {
 	fileStack := utils.FileWithLineNum()
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
-	if l.LogLevel >= gormLogger.Info {
-		logger.Info(fmt.Sprintf(msg, data...))
+	res := fmt.Sprintf(msg, data...)
+	if len(res) > 200 {
+		// split and concat
+		res = res[:200] + "..."
+	}
+
+	if l.LogLevel >= gormLogger.Error {
+		logger.Info(res)
 	}
 }
 
@@ -68,8 +74,14 @@ func (l *Logger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	fileStack := utils.FileWithLineNum()
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
-	if l.LogLevel >= gormLogger.Warn {
-		logger.Warn(fmt.Sprintf(msg, data...))
+	res := fmt.Sprintf(msg, data...)
+	if len(res) > 200 {
+		// split and concat
+		res = res[:200] + "..."
+	}
+
+	if l.LogLevel >= gormLogger.Error {
+		logger.Warn(res)
 	}
 }
 
@@ -85,8 +97,14 @@ func (l *Logger) Error(ctx context.Context, msg string, data ...interface{}) {
 	fileStack := utils.FileWithLineNum()
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
+	res := fmt.Sprintf(msg, data...)
+	if len(res) > 200 {
+		// split and concat
+		res = res[:200] + "..."
+	}
+
 	if l.LogLevel >= gormLogger.Error {
-		logger.Warn(fmt.Sprintf(msg, data...))
+		logger.Error(res)
 	}
 }
 
@@ -103,16 +121,20 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql stri
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
 	elapsed := time.Since(begin)
+	sql, rows := fc()
+	// trim sql
+	if len(sql) > 200 {
+		sql = sql[:200] + "..."
+	}
+
 	switch {
 	case err != nil && l.LogLevel >= gormLogger.Error && (!errors.Is(err, gormLogger.ErrRecordNotFound) || !l.IgnoreRecordNotFoundError):
-		sql, rows := fc()
 		if rows == -1 {
 			logger.Error(fmt.Sprintf(traceErrStr, err, float64(elapsed.Nanoseconds())/1e6, "-", sql))
 		} else {
 			logger.Error(fmt.Sprintf(traceErrStr, err, float64(elapsed.Nanoseconds())/1e6, rows, sql))
 		}
 	case elapsed > l.SlowThreshold && l.SlowThreshold != 0 && l.LogLevel >= gormLogger.Warn:
-		sql, rows := fc()
 		slowLog := fmt.Sprintf("SLOW SQL >= %v", l.SlowThreshold)
 		if rows == -1 {
 			logger.Warn(fmt.Sprintf(traceWarnStr, slowLog, float64(elapsed.Nanoseconds())/1e6, "-", sql))
@@ -120,7 +142,6 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql stri
 			logger.Warn(fmt.Sprintf(traceWarnStr, slowLog, float64(elapsed.Nanoseconds())/1e6, rows, sql))
 		}
 	case l.LogLevel == gormLogger.Info:
-		sql, rows := fc()
 		if rows == -1 {
 			logger.Info(fmt.Sprintf(traceStr, float64(elapsed.Nanoseconds())/1e6, "-", sql))
 		} else {
