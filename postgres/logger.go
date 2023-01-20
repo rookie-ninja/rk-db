@@ -51,14 +51,10 @@ func (l *Logger) Info(ctx context.Context, msg string, data ...interface{}) {
 	fileStack := utils.FileWithLineNum()
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
-	res := fmt.Sprintf(msg, data...)
-	if len(res) > 200 {
-		// split and concat
-		res = res[:200] + "..."
-	}
+	msg = l.trimMessage(fmt.Sprintf(msg, data...))
 
 	if l.LogLevel >= gormLogger.Error {
-		logger.Info(res)
+		logger.Info(msg)
 	}
 }
 
@@ -74,14 +70,10 @@ func (l *Logger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	fileStack := utils.FileWithLineNum()
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
-	res := fmt.Sprintf(msg, data...)
-	if len(res) > 200 {
-		// split and concat
-		res = res[:200] + "..."
-	}
+	msg = l.trimMessage(fmt.Sprintf(msg, data...))
 
 	if l.LogLevel >= gormLogger.Error {
-		logger.Warn(res)
+		logger.Warn(msg)
 	}
 }
 
@@ -97,14 +89,10 @@ func (l *Logger) Error(ctx context.Context, msg string, data ...interface{}) {
 	fileStack := utils.FileWithLineNum()
 	logger = logger.WithOptions(zap.AddCallerSkip(linesToSkip(fileStack)))
 
-	res := fmt.Sprintf(msg, data...)
-	if len(res) > 200 {
-		// split and concat
-		res = res[:200] + "..."
-	}
+	msg = l.trimMessage(fmt.Sprintf(msg, data...))
 
 	if l.LogLevel >= gormLogger.Error {
-		logger.Error(res)
+		logger.Error(msg)
 	}
 }
 
@@ -123,9 +111,7 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql stri
 	elapsed := time.Since(begin)
 	sql, rows := fc()
 	// trim sql
-	if len(sql) > 200 {
-		sql = sql[:200] + "..."
-	}
+	sql = l.trimMessage(sql)
 
 	switch {
 	case err != nil && l.LogLevel >= gormLogger.Error && (!errors.Is(err, gormLogger.ErrRecordNotFound) || !l.IgnoreRecordNotFoundError):
@@ -177,4 +163,12 @@ func (l *Logger) getLogger(ctx context.Context) *zap.Logger {
 	callerSkip := zap.AddCallerSkip(linesToSkip(fileStack))
 
 	return logger.WithOptions(callerSkip)
+}
+
+func (l *Logger) trimMessage(msg string) string {
+	if len(msg) > 200 {
+		msg = msg[:200] + "..."
+	}
+
+	return msg
 }
