@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/prometheus/client_golang v1.13.0
-	github.com/rookie-ninja/rk-entry/v2 v2.2.17
+	github.com/rookie-ninja/rk-entry/v2 v2.2.18
 	github.com/rookie-ninja/rk-logger v1.2.13
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.23.0
