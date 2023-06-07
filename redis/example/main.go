@@ -7,7 +7,7 @@ package main
 import (
 	"context"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/redis"
 	"github.com/rookie-ninja/rk-gin/v2/boot"

@@ -11,7 +11,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/rookie-ninja/rk-entry/v2/entry"
 	"go.uber.org/zap"
 	"strings"
@@ -51,64 +51,71 @@ type BootRedis struct {
 
 // BootRedisE sub struct for BootRedis
 type BootRedisE struct {
-	Name                 string   `yaml:"name" json:"name"` // Required
-	Description          string   `yaml:"description" json:"description"`
-	Enabled              bool     `yaml:"enabled" json:"enabled"` // Required
-	Domain               string   `yaml:"domain" json:"domain"`
-	Addrs                []string `yaml:"addrs" json:"addrs"` // Required
-	MasterName           string   `yaml:"masterName" json:"masterName"`
-	SentinelPass         string   `yaml:"sentinelPass" json:"sentinelPass"`
-	DB                   int      `yaml:"db" json:"db"`     // Required
-	User                 string   `yaml:"user" json:"user"` // Required
-	Pass                 string   `yaml:"pass" json:"pass"` // Required
-	MaxRetries           int      `yaml:"maxRetries" json:"maxRetries"`
-	MinRetryBackoffMs    int      `yaml:"minRetryBackoffMs" json:"minRetryBackoffMs"`
-	MaxRetryBackoffMs    int      `yaml:"maxRetryBackoffMs" json:"maxRetryBackoffMs"`
-	DialTimeoutMs        int      `yaml:"dialTimeoutMs" json:"dialTimeoutMs"`
-	ReadTimeoutMs        int      `yaml:"readTimeoutMs" json:"readTimeoutMs"`
-	WriteTimeoutMs       int      `yaml:"writeTimeoutMs" json:"writeTimeoutMs"`
-	PoolFIFO             bool     `yaml:"poolFIFO" json:"poolFIFO"`
-	PoolSize             int      `yaml:"poolSize" json:"poolSize"`
-	MinIdleConn          int      `yaml:"minIdleConn" json:"minIdleConn"`
-	MaxConnAgeMs         int      `yaml:"maxConnAgeMs" json:"maxConnAgeMs"`
-	PoolTimeoutMs        int      `yaml:"poolTimeoutMs" json:"poolTimeoutMs"`
-	IdleTimeoutMs        int      `yaml:"idleTimeoutMs" json:"idleTimeoutMs"`
-	IdleCheckFrequencyMs int      `yaml:"idleCheckFrequencyMs" json:"idleCheckFrequencyMs"`
-	MaxRedirects         int      `yaml:"maxRedirects" json:"maxRedirects"`
-	ReadOnly             bool     `yaml:"readOnly" json:"readOnly"`
-	RouteByLatency       bool     `yaml:"routeByLatency" json:"routeByLatency"`
-	RouteRandomly        bool     `yaml:"routeRandomly" json:"routeRandomly"`
-	LoggerEntry          string   `yaml:"loggerEntry" json:"loggerEntry"`
-	CertEntry            string   `yaml:"certEntry" json:"certEntry"`
+	Name                  string   `yaml:"name" json:"name"` // Required
+	Description           string   `yaml:"description" json:"description"`
+	Enabled               bool     `yaml:"enabled" json:"enabled"` // Required
+	Domain                string   `yaml:"domain" json:"domain"`
+	Addrs                 []string `yaml:"addrs" json:"addrs"` // Required
+	MasterName            string   `yaml:"masterName" json:"masterName"`
+	SentinelPass          string   `yaml:"sentinelPass" json:"sentinelPass"`
+	DB                    int      `yaml:"db" json:"db"`     // Required
+	User                  string   `yaml:"user" json:"user"` // Required
+	Pass                  string   `yaml:"pass" json:"pass"` // Required
+	MaxRetries            int      `yaml:"maxRetries" json:"maxRetries"`
+	MinRetryBackoffMs     int      `yaml:"minRetryBackoffMs" json:"minRetryBackoffMs"`
+	MaxRetryBackoffMs     int      `yaml:"maxRetryBackoffMs" json:"maxRetryBackoffMs"`
+	DialTimeoutMs         int      `yaml:"dialTimeoutMs" json:"dialTimeoutMs"`
+	ReadTimeoutMs         int      `yaml:"readTimeoutMs" json:"readTimeoutMs"`
+	WriteTimeoutMs        int      `yaml:"writeTimeoutMs" json:"writeTimeoutMs"`
+	ContextTimeoutEnabled bool     `yaml:"contextTimeoutEnabled" json:"contextTimeoutEnabled"`
+	PoolFIFO              bool     `yaml:"poolFIFO" json:"poolFIFO"`
+	PoolSize              int      `yaml:"poolSize" json:"poolSize"`
+	MinIdleConn           int      `yaml:"minIdleConn" json:"minIdleConn"`
+	MaxIdleConn           int      `yaml:"maxIdleConn" json:"maxIdleConn"`
+	ConnMaxIdleTimeMs     int      `yaml:"connMaxIdleTimeMs" json:"connMaxIdleTimeMs"`
+	ConnMaxLifetimeMs     int      `yaml:"connMaxLifetimeMs" json:"connMaxLifetimeMs"`
+	PoolTimeoutMs         int      `yaml:"poolTimeoutMs" json:"poolTimeoutMs"`
+	IdleTimeoutMs         int      `yaml:"idleTimeoutMs" json:"idleTimeoutMs"`
+	IdleCheckFrequencyMs  int      `yaml:"idleCheckFrequencyMs" json:"idleCheckFrequencyMs"`
+	MaxRedirects          int      `yaml:"maxRedirects" json:"maxRedirects"`
+	ReadOnly              bool     `yaml:"readOnly" json:"readOnly"`
+	RouteByLatency        bool     `yaml:"routeByLatency" json:"routeByLatency"`
+	RouteRandomly         bool     `yaml:"routeRandomly" json:"routeRandomly"`
+	LoggerEntry           string   `yaml:"loggerEntry" json:"loggerEntry"`
+	CertEntry             string   `yaml:"certEntry" json:"certEntry"`
 }
 
 // ToRedisUniversalOptions convert BootConfigRedis to redis.UniversalOptions
 func ToRedisUniversalOptions(config *BootRedisE) *redis.UniversalOptions {
 	if config.Enabled {
 		return &redis.UniversalOptions{
-			Addrs:              config.Addrs,
-			DB:                 config.DB,
-			Username:           config.User,
-			Password:           config.Pass,
-			SentinelPassword:   config.SentinelPass,
-			MaxRetries:         config.MaxRetries,
-			MinRetryBackoff:    time.Duration(config.MinRetryBackoffMs) * time.Millisecond,
-			MaxRetryBackoff:    time.Duration(config.MaxRetryBackoffMs) * time.Millisecond,
-			DialTimeout:        time.Duration(config.DialTimeoutMs) * time.Millisecond,
-			ReadTimeout:        time.Duration(config.ReadTimeoutMs) * time.Millisecond,
-			WriteTimeout:       time.Duration(config.WriteTimeoutMs) * time.Millisecond,
-			PoolFIFO:           config.PoolFIFO,
-			PoolSize:           config.PoolSize,
-			MinIdleConns:       config.MinIdleConn,
-			MaxConnAge:         time.Duration(config.MaxConnAgeMs) * time.Millisecond,
-			PoolTimeout:        time.Duration(config.PoolTimeoutMs) * time.Millisecond,
-			IdleTimeout:        time.Duration(config.IdleTimeoutMs) * time.Millisecond,
-			IdleCheckFrequency: time.Duration(config.IdleCheckFrequencyMs) * time.Millisecond,
-			MaxRedirects:       config.MaxRedirects,
-			ReadOnly:           config.ReadOnly,
-			RouteByLatency:     config.RouteByLatency,
-			RouteRandomly:      config.RouteRandomly,
-			MasterName:         config.MasterName,
+			Addrs:                 config.Addrs,
+			DB:                    config.DB,
+			Username:              config.User,
+			Password:              config.Pass,
+			SentinelPassword:      config.SentinelPass,
+			MaxRetries:            config.MaxRetries,
+			MinRetryBackoff:       time.Duration(config.MinRetryBackoffMs) * time.Millisecond,
+			MaxRetryBackoff:       time.Duration(config.MaxRetryBackoffMs) * time.Millisecond,
+			DialTimeout:           time.Duration(config.DialTimeoutMs) * time.Millisecond,
+			ReadTimeout:           time.Duration(config.ReadTimeoutMs) * time.Millisecond,
+			WriteTimeout:          time.Duration(config.WriteTimeoutMs) * time.Millisecond,
+			ContextTimeoutEnabled: config.ContextTimeoutEnabled,
+
+			PoolFIFO:     config.PoolFIFO,
+			PoolSize:     config.PoolSize,
+			PoolTimeout:  time.Duration(config.PoolTimeoutMs) * time.Millisecond,
+			MinIdleConns: config.MinIdleConn,
+			MaxIdleConns: config.MaxIdleConn,
+
+			ConnMaxIdleTime: time.Duration(config.ConnMaxIdleTimeMs) * time.Millisecond,
+			ConnMaxLifetime: time.Duration(config.ConnMaxLifetimeMs) * time.Millisecond,
+
+			MaxRedirects:   config.MaxRedirects,
+			ReadOnly:       config.ReadOnly,
+			RouteByLatency: config.RouteByLatency,
+			RouteRandomly:  config.RouteRandomly,
+			MasterName:     config.MasterName,
 		}
 	} else {
 		return nil
@@ -152,29 +159,33 @@ func RegisterRedisEntryYAML(raw []byte) map[string]rkentry.Entry {
 
 	for _, element := range configMap {
 		universalOpt := &redis.UniversalOptions{
-			Addrs:              element.Addrs,
-			DB:                 element.DB,
-			Username:           element.User,
-			Password:           element.Pass,
-			SentinelPassword:   element.SentinelPass,
-			MaxRetries:         element.MaxRetries,
-			MinRetryBackoff:    time.Duration(element.MinRetryBackoffMs) * time.Millisecond,
-			MaxRetryBackoff:    time.Duration(element.MaxRetryBackoffMs) * time.Millisecond,
-			DialTimeout:        time.Duration(element.DialTimeoutMs) * time.Millisecond,
-			ReadTimeout:        time.Duration(element.ReadTimeoutMs) * time.Millisecond,
-			WriteTimeout:       time.Duration(element.WriteTimeoutMs) * time.Millisecond,
-			PoolFIFO:           element.PoolFIFO,
-			PoolSize:           element.PoolSize,
-			MinIdleConns:       element.MinIdleConn,
-			MaxConnAge:         time.Duration(element.MaxConnAgeMs) * time.Millisecond,
-			PoolTimeout:        time.Duration(element.PoolTimeoutMs) * time.Millisecond,
-			IdleTimeout:        time.Duration(element.IdleTimeoutMs) * time.Millisecond,
-			IdleCheckFrequency: time.Duration(element.IdleCheckFrequencyMs) * time.Millisecond,
-			MaxRedirects:       element.MaxRedirects,
-			ReadOnly:           element.ReadOnly,
-			RouteByLatency:     element.RouteByLatency,
-			RouteRandomly:      element.RouteRandomly,
-			MasterName:         element.MasterName,
+			Addrs:                 element.Addrs,
+			DB:                    element.DB,
+			Username:              element.User,
+			Password:              element.Pass,
+			SentinelPassword:      element.SentinelPass,
+			MaxRetries:            element.MaxRetries,
+			MinRetryBackoff:       time.Duration(element.MinRetryBackoffMs) * time.Millisecond,
+			MaxRetryBackoff:       time.Duration(element.MaxRetryBackoffMs) * time.Millisecond,
+			DialTimeout:           time.Duration(element.DialTimeoutMs) * time.Millisecond,
+			ReadTimeout:           time.Duration(element.ReadTimeoutMs) * time.Millisecond,
+			WriteTimeout:          time.Duration(element.WriteTimeoutMs) * time.Millisecond,
+			ContextTimeoutEnabled: element.ContextTimeoutEnabled,
+
+			PoolFIFO:     element.PoolFIFO,
+			PoolSize:     element.PoolSize,
+			PoolTimeout:  time.Duration(element.PoolTimeoutMs) * time.Millisecond,
+			MinIdleConns: element.MinIdleConn,
+			MaxIdleConns: element.MaxIdleConn,
+
+			ConnMaxIdleTime: time.Duration(element.ConnMaxIdleTimeMs) * time.Millisecond,
+			ConnMaxLifetime: time.Duration(element.ConnMaxLifetimeMs) * time.Millisecond,
+
+			MaxRedirects:   element.MaxRedirects,
+			ReadOnly:       element.ReadOnly,
+			RouteByLatency: element.RouteByLatency,
+			RouteRandomly:  element.RouteRandomly,
+			MasterName:     element.MasterName,
 		}
 
 		certEntry := rkentry.GlobalAppCtx.GetCertEntry(element.CertEntry)
