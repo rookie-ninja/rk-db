@@ -74,7 +74,7 @@ package main
 import (
 	"context"
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/rookie-ninja/rk-boot/v2"
 	"github.com/rookie-ninja/rk-db/redis"
 	"github.com/rookie-ninja/rk-gin/v2/boot"
@@ -145,6 +145,7 @@ func Get(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, payload)
 }
+
 ```
 
 ### 3.Start server
@@ -198,7 +199,6 @@ redis:
   - name: redis                      # Required
     enabled: true                    # Required
     addrs: ["localhost:6379"]        # Required, One addr is for single, multiple is for cluster
-    domain: "*"                      # Optional
 #    description: ""                 # Optional
 #
 #    # For HA
@@ -224,12 +224,13 @@ redis:
 #    poolFIFO: false                 # Optional, default: false
 #    poolSize: 10                    # Optional, default: 10
 #    minIdleConn: 0                  # Optional, default: 0
-#    maxConnAgeMs: 0                 # Optional, default: no aged connection
+#    maxIdleConn: 0                  # Optional, default: 0
+#    connMaxIdleTimeMs: 3000         # Optional, default: 3000 (3 seconds)
+#    connMaxLifetimeMs: 3000         # Optional, default: 3000 (3 seconds)
 #    poolTimeoutMs: 1300             # Optional, default: 1300 (1.3 seconds)
 #    idleTimeoutMs: 1                # Optional, default: 5 minutes
 #    idleCheckFrequencyMs: 1         # Optional, default: 1 minutes
 #
-#    # For logger
 #    loggerEntry: ""                 # Optional, default: default logger with STDOUT
 ```
 
