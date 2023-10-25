@@ -7,7 +7,7 @@ require (
 	github.com/rookie-ninja/rk-boot/v2 v2.2.5
 	github.com/rookie-ninja/rk-db/sqlserver v0.0.0
 	github.com/rookie-ninja/rk-gin/v2 v2.2.7
-	gorm.io/gorm v1.23.8
+	gorm.io/gorm v1.24.0
 )
 
 replace github.com/rookie-ninja/rk-db/sqlserver => ../
