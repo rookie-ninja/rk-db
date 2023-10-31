@@ -439,20 +439,20 @@ func (entry *SqliteEntry) connect() error {
 		entry.logger.delegate.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 
 		// 1: create directory if missing
-		if !filepath.IsAbs(innerDb.dbDir) {
+		if !filepath.IsAbs(filepath.ToSlash(innerDb.dbDir)) {
 			wd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
 
-			innerDb.dbDir = filepath.Join(wd, innerDb.dbDir)
+			innerDb.dbDir = filepath.ToSlash(filepath.Join(wd, innerDb.dbDir))
 			err = os.MkdirAll(innerDb.dbDir, os.ModePerm)
 			if err != nil {
 				return err
 			}
 		}
 
-		dbFile = filepath.Join(innerDb.dbDir, innerDb.name+".db")
+		dbFile = filepath.ToSlash(filepath.Join(innerDb.dbDir, innerDb.name+".db"))
 
 		// 2: create dsn
 		params := []string{fmt.Sprintf("file:%s?", dbFile)}
@@ -527,12 +527,12 @@ func toAbsPath(p ...string) []string {
 	res := make([]string, 0)
 
 	for i := range p {
-		if filepath.IsAbs(p[i]) || p[i] == "stdout" || p[i] == "stderr" {
+		if filepath.IsAbs(filepath.ToSlash(p[i])) || p[i] == "stdout" || p[i] == "stderr" {
 			res = append(res, p[i])
 			continue
 		}
 		wd, _ := os.Getwd()
-		res = append(res, filepath.Join(wd, p[i]))
+		res = append(res, filepath.ToSlash(filepath.Join(wd, p[i])))
 	}
 
 	return res
