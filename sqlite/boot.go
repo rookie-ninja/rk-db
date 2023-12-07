@@ -333,6 +333,10 @@ func (entry *SqliteEntry) Bootstrap(ctx context.Context) {
 
 // Interrupt SqliteEntry
 func (entry *SqliteEntry) Interrupt(ctx context.Context) {
+	for _, db := range entry.GormDbMap {
+		closeDB(db)
+	}
+
 	// extract eventId if exists
 	fields := make([]zap.Field, 0)
 
@@ -536,4 +540,13 @@ func toAbsPath(p ...string) []string {
 	}
 
 	return res
+}
+
+func closeDB(db *gorm.DB) {
+	if db != nil {
+		inner, _ := db.DB()
+		if inner != nil {
+			inner.Close()
+		}
+	}
 }

@@ -388,6 +388,10 @@ func (entry *MySqlEntry) Bootstrap(ctx context.Context) {
 
 // Interrupt MySqlEntry
 func (entry *MySqlEntry) Interrupt(ctx context.Context) {
+	for _, db := range entry.GormDbMap {
+		closeDB(db)
+	}
+
 	// extract eventId if exists
 	fields := make([]zap.Field, 0)
 
@@ -503,6 +507,7 @@ func (entry *MySqlEntry) connect() error {
 
 			// failed to connect to database
 			if err != nil {
+				closeDB(db)
 				return err
 			}
 
@@ -514,8 +519,11 @@ func (entry *MySqlEntry) connect() error {
 			db = db.Exec(createSQL)
 
 			if db.Error != nil {
+				closeDB(db)
 				return db.Error
 			}
+
+			closeDB(db)
 			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
@@ -568,4 +576,13 @@ func toAbsPath(p ...string) []string {
 	}
 
 	return res
+}
+
+func closeDB(db *gorm.DB) {
+	if db != nil {
+		inner, _ := db.DB()
+		if inner != nil {
+			inner.Close()
+		}
+	}
 }

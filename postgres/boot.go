@@ -296,6 +296,10 @@ func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
 
 // Interrupt PostgresEntry
 func (entry *PostgresEntry) Interrupt(ctx context.Context) {
+	for _, db := range entry.GormDbMap {
+		closeDB(db)
+	}
+
 	// extract eventId if exists
 	fields := make([]zap.Field, 0)
 
@@ -433,6 +437,7 @@ func (entry *PostgresEntry) connect() error {
 			db, err = gorm.Open(postgres.Open(dsnForDefaultDb), entry.GormConfigMap[innerDb.name])
 			// failed to connect to database
 			if err != nil {
+				closeDB(db)
 				return err
 			}
 
@@ -441,6 +446,7 @@ func (entry *PostgresEntry) connect() error {
 			res := db.Raw("SELECT * FROM pg_database WHERE datname = ?", innerDb.name).Scan(innerDbInfo)
 
 			if res.Error != nil {
+				closeDB(db)
 				return res.Error
 			}
 
@@ -449,10 +455,12 @@ func (entry *PostgresEntry) connect() error {
 				entry.logger.delegate.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", innerDb.name, entry.User))
 				res := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER %s ENCODING %s`, innerDb.name, entry.User, "UTF8"))
 				if res.Error != nil {
+					closeDB(db)
 					return res.Error
 				}
 			}
 
+			closeDB(db)
 			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
 		}
 
@@ -525,4 +533,13 @@ func toAbsPath(p ...string) []string {
 	}
 
 	return res
+}
+
+func closeDB(db *gorm.DB) {
+	if db != nil {
+		inner, _ := db.DB()
+		if inner != nil {
+			inner.Close()
+		}
+	}
 }
