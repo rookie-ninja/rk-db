@@ -287,6 +287,7 @@ func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
 		// iterate database section
 		for _, db := range element.Database {
 			opts = append(opts, WithDatabase(db.Name, db.DryRun, db.AutoCreate, db.PreferSimpleProtocol, db.Params...))
+
 			if db.Plugins.Trace.Enabled {
 				db.Plugins.Trace.DbAddr = element.Addr
 				db.Plugins.Trace.DbName = db.Name
