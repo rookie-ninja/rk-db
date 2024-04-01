@@ -53,7 +53,8 @@ type BootMySQLE struct {
 		DryRun     bool     `yaml:"dryRun" json:"dryRun"`
 		AutoCreate bool     `yaml:"autoCreate" json:"autoCreate"`
 		Plugins    struct {
-			Prom plugins.PromConfig `yaml:"prom"`
+			Prom  plugins.PromConfig  `yaml:"prom"`
+			Trace plugins.TraceConfig `yaml:"trace"`
 		} `yaml:"plugins" json:"plugins"`
 	} `yaml:"database" json:"database"`
 	Logger struct {
@@ -295,7 +296,13 @@ func RegisterMySqlEntryYAML(raw []byte) map[string]rkentry.Entry {
 		// iterate database section
 		for _, db := range element.Database {
 			opts = append(opts, WithDatabase(db.Name, db.DryRun, db.AutoCreate, db.Params...))
-
+			if db.Plugins.Trace.Enabled {
+				db.Plugins.Trace.DbAddr = element.Addr
+				db.Plugins.Trace.DbName = db.Name
+				db.Plugins.Trace.DbType = "mysql"
+				trace := plugins.NewTrace(&db.Plugins.Trace)
+				opts = append(opts, WithPlugin(db.Name, trace))
+			}
 			if db.Plugins.Prom.Enabled {
 				db.Plugins.Prom.DbAddr = element.Addr
 				db.Plugins.Prom.DbName = db.Name
