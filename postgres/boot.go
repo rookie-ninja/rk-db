@@ -53,6 +53,8 @@ type BootPostgresE struct {
 		DryRun               bool     `yaml:"dryRun" json:"dryRun"`
 		AutoCreate           bool     `yaml:"autoCreate" json:"autoCreate"`
 		PreferSimpleProtocol bool     `yaml:"preferSimpleProtocol" json:"preferSimpleProtocol"`
+		MaxIdleConn          int      `yaml:"maxIdleConn" json:"maxIdleConn"`
+		MaxOpenConn          int      `yaml:"maxOpenConn" json:"maxOpenConn"`
 		Plugins              struct {
 			Prom plugins.PromConfig `yaml:"prom"`
 		} `yaml:"plugins" json:"plugins"`
@@ -86,6 +88,8 @@ type databaseInner struct {
 	dryRun               bool
 	autoCreate           bool
 	preferSimpleProtocol bool
+	maxIdleConn          int
+	maxOpenConn          int
 	params               []string
 	plugins              []gorm.Plugin
 }
@@ -475,6 +479,22 @@ func (entry *PostgresEntry) connect() error {
 		// failed to connect to database
 		if err != nil {
 			return err
+		}
+
+		if innerDb.maxOpenConn > 0 {
+			if inner, err := db.DB(); err != nil {
+				return err
+			} else {
+				inner.SetMaxOpenConns(innerDb.maxOpenConn)
+			}
+		}
+
+		if innerDb.maxIdleConn > 0 {
+			if inner, err := db.DB(); err != nil {
+				return err
+			} else {
+				inner.SetMaxIdleConns(innerDb.maxIdleConn)
+			}
 		}
 
 		for i := range innerDb.plugins {

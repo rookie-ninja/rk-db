@@ -8,7 +8,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/rookie-ninja/rk-boot/v2 v2.2.5
 	github.com/rookie-ninja/rk-db/mysql v0.0.1
-	github.com/rookie-ninja/rk-entry/v2 v2.2.19
+	github.com/rookie-ninja/rk-entry/v2 v2.2.20
 	github.com/rookie-ninja/rk-gin/v2 v2.2.7
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.10.0 // indirect
 	gorm.io/gorm v1.24.0
