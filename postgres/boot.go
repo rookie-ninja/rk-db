@@ -47,7 +47,11 @@ type BootPostgresE struct {
 	User        string `yaml:"user" json:"user"`
 	Pass        string `yaml:"pass" json:"pass"`
 	Addr        string `yaml:"addr" json:"addr"`
-	Database    []struct {
+	HealthCheck struct {
+		Enabled    bool `json:"enabled"`
+		IntervalMs int  `json:"intervalMs"`
+	} `json:"healthCheck"`
+	Database []struct {
 		Name                 string   `yaml:"name" json:"name"`
 		Params               []string `yaml:"params" json:"params"`
 		DryRun               bool     `yaml:"dryRun" json:"dryRun"`
@@ -71,16 +75,19 @@ type BootPostgresE struct {
 
 // PostgresEntry will init gorm.DB with provided arguments
 type PostgresEntry struct {
-	entryName        string                  `yaml:"entryName" json:"entryName"`
-	entryType        string                  `yaml:"entryType" json:"entryType"`
-	entryDescription string                  `yaml:"-" json:"-"`
-	User             string                  `yaml:"user" json:"user"`
-	pass             string                  `yaml:"-" json:"-"`
-	logger           *Logger                 `yaml:"-" json:"-"`
-	Addr             string                  `yaml:"addr" json:"addr"`
-	innerDbList      []*databaseInner        `yaml:"-" json:"-"`
-	GormDbMap        map[string]*gorm.DB     `yaml:"-" json:"-"`
-	GormConfigMap    map[string]*gorm.Config `yaml:"-" json:"-"`
+	entryName           string                  `yaml:"entryName" json:"entryName"`
+	entryType           string                  `yaml:"entryType" json:"entryType"`
+	entryDescription    string                  `yaml:"-" json:"-"`
+	User                string                  `yaml:"user" json:"user"`
+	pass                string                  `yaml:"-" json:"-"`
+	logger              *Logger                 `yaml:"-" json:"-"`
+	Addr                string                  `yaml:"addr" json:"addr"`
+	innerDbList         []*databaseInner        `yaml:"-" json:"-"`
+	GormDbMap           map[string]*gorm.DB     `yaml:"-" json:"-"`
+	GormConfigMap       map[string]*gorm.Config `yaml:"-" json:"-"`
+	quitChannel         chan struct{}           `yaml:"-" json:"-"`
+	healthCheckEnabled  bool                    `yaml:"-" json:"-"`
+	healthCheckInterval time.Duration           `yaml:"-" json:"-"`
 }
 
 type databaseInner struct {
@@ -205,6 +212,16 @@ func RegisterPostgresEntry(boot *BootPostgres) []*PostgresEntry {
 			GormDbMap:     make(map[string]*gorm.DB),
 			GormConfigMap: make(map[string]*gorm.Config),
 			logger:        logger,
+			quitChannel:   make(chan struct{}),
+		}
+
+		if element.HealthCheck.Enabled {
+			entry.healthCheckEnabled = true
+			if element.HealthCheck.IntervalMs > 0 {
+				entry.healthCheckInterval = time.Duration(element.HealthCheck.IntervalMs * int(time.Millisecond))
+			} else {
+				entry.healthCheckInterval = 5000 * time.Millisecond
+			}
 		}
 
 		// iterate database section
@@ -296,10 +313,31 @@ func (entry *PostgresEntry) Bootstrap(ctx context.Context) {
 		rkentry.ShutdownWithError(fmt.Errorf("failed to connect to database at %s@%s",
 			entry.User, entry.Addr))
 	}
+
+	// enable health check
+	if entry.healthCheckEnabled {
+		go func() {
+			waitChannel := time.NewTimer(entry.healthCheckInterval)
+
+			for {
+				select {
+				case <-entry.quitChannel:
+					return
+				case <-waitChannel.C:
+					entry.IsHealthy()
+					waitChannel.Reset(entry.healthCheckInterval)
+				default:
+					time.Sleep(time.Duration(3) * time.Second)
+				}
+			}
+		}()
+	}
 }
 
 // Interrupt PostgresEntry
 func (entry *PostgresEntry) Interrupt(ctx context.Context) {
+	close(entry.quitChannel)
+
 	for _, db := range entry.GormDbMap {
 		closeDB(db)
 	}
@@ -349,9 +387,11 @@ func (entry *PostgresEntry) String() string {
 func (entry *PostgresEntry) IsHealthy() bool {
 	for _, gormDb := range entry.GormDbMap {
 		if db, err := gormDb.DB(); err != nil {
+			entry.logger.delegate.Warn("failed get DB", zap.String("db", gormDb.Name()))
 			return false
 		} else {
 			if err := db.Ping(); err != nil {
+				entry.logger.delegate.Warn("failed to ping DB", zap.String("db", gormDb.Name()))
 				return false
 			}
 		}
