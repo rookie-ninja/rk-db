@@ -546,13 +546,13 @@ func (entry *PostgresEntry) connect() error {
 
 		sharedPoolsLock.Lock()
 		if pool, ok := sharedPools[dsn]; ok {
-			db, err = gorm.Open(postgres.New(postgres.Config{Conn: pool}), entry.GormConfigMap[innerDb.name])
+			db, err = gorm.Open(newDialector(postgres.New(postgres.Config{Conn: pool})), entry.GormConfigMap[innerDb.name])
 			sharedPoolsLock.Unlock()
 			if err != nil {
 				return err
 			}
 		} else {
-			db, err = gorm.Open(postgres.Open(dsn), entry.GormConfigMap[innerDb.name])
+			db, err = gorm.Open(newDialector(postgres.Open(dsn)), entry.GormConfigMap[innerDb.name])
 			if err != nil {
 				sharedPoolsLock.Unlock()
 				return err
