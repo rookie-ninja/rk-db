@@ -8,6 +8,7 @@ package rkpostgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -100,6 +102,26 @@ type databaseInner struct {
 	params               []string
 	plugins              []gorm.Plugin
 }
+
+// physicalName returns the database actually connected to: "dbname=" in params if provided,
+// otherwise the logical name. Lets several logical databases (GetDB names) live in one physical database.
+func (inner *databaseInner) physicalName() string {
+	for _, p := range inner.params {
+		if strings.HasPrefix(p, "dbname=") {
+			return strings.TrimPrefix(p, "dbname=")
+		}
+	}
+
+	return inner.name
+}
+
+// sharedPools reuses one *sql.DB per DSN within the process, so logical databases pointing at the same
+// physical database share a single connection pool instead of opening one pool each.
+// Pool size (maxOpenConn/maxIdleConn) is decided by the first database that opens it.
+var (
+	sharedPoolsLock sync.Mutex
+	sharedPools     = map[string]*sql.DB{}
+)
 
 // RegisterPostgresEntryYAML register PostgresEntry based on config file into rkentry.GlobalAppCtx
 func RegisterPostgresEntryYAML(raw []byte) map[string]rkentry.Entry {
@@ -236,6 +258,8 @@ func RegisterPostgresEntry(boot *BootPostgres) []*PostgresEntry {
 				dryRun:               db.DryRun,
 				autoCreate:           db.AutoCreate,
 				preferSimpleProtocol: db.PreferSimpleProtocol,
+				maxIdleConn:          db.MaxIdleConn,
+				maxOpenConn:          db.MaxOpenConn,
 				params:               make([]string, 0),
 			}
 
@@ -461,13 +485,19 @@ func (entry *PostgresEntry) connect() error {
 		var db *gorm.DB
 		var err error
 
+		dbName := innerDb.physicalName()
+
 		params := make([]string, 0)
 		params = append(params, dsnParams...)
-		params = append(params, innerDb.params...)
+		for _, p := range innerDb.params {
+			if !strings.HasPrefix(p, "dbname=") {
+				params = append(params, p)
+			}
+		}
 
 		// 1: create db if missing
 		if !innerDb.dryRun && innerDb.autoCreate {
-			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] if not exists", innerDb.name))
+			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] if not exists", dbName))
 
 			// It is a little bit complex procedure here
 			// connect to database postgres and try to create DB
@@ -487,7 +517,7 @@ func (entry *PostgresEntry) connect() error {
 
 			// 2: check if db exists with bellow statement
 			innerDbInfo := make(map[string]interface{})
-			res := db.Raw("SELECT * FROM pg_database WHERE datname = ?", innerDb.name).Scan(innerDbInfo)
+			res := db.Raw("SELECT * FROM pg_database WHERE datname = ?", dbName).Scan(innerDbInfo)
 
 			if res.Error != nil {
 				closeDB(db)
@@ -496,8 +526,8 @@ func (entry *PostgresEntry) connect() error {
 
 			// 3: database not found, create one
 			if len(innerDbInfo) < 1 {
-				entry.logger.delegate.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", innerDb.name, entry.User))
-				res := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER %s ENCODING %s`, innerDb.name, entry.User, "UTF8"))
+				entry.logger.delegate.Info(fmt.Sprintf("Database:%s not found, create with owner:%s, encoding:UTF8", dbName, entry.User))
+				res := db.Exec(fmt.Sprintf(`CREATE DATABASE "%s" WITH OWNER %s ENCODING %s`, dbName, entry.User, "UTF8"))
 				if res.Error != nil {
 					closeDB(db)
 					return res.Error
@@ -505,36 +535,42 @@ func (entry *PostgresEntry) connect() error {
 			}
 
 			closeDB(db)
-			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] successs", innerDb.name))
+			entry.logger.delegate.Info(fmt.Sprintf("Creating database [%s] successs", dbName))
 		}
 
 		entry.logger.delegate.Info(fmt.Sprintf("Connecting to database [%s]", innerDb.name))
 
-		// 2: connect
-		params = append(params, fmt.Sprintf("dbname=%s", innerDb.name))
+		// 2: connect, reusing the pool if another logical database already opened the same DSN
+		params = append(params, fmt.Sprintf("dbname=%s", dbName))
 		dsn := strings.Join(params, " ")
 
-		db, err = gorm.Open(postgres.Open(dsn), entry.GormConfigMap[innerDb.name])
-
-		// failed to connect to database
-		if err != nil {
-			return err
-		}
-
-		if innerDb.maxOpenConn > 0 {
-			if inner, err := db.DB(); err != nil {
+		sharedPoolsLock.Lock()
+		if pool, ok := sharedPools[dsn]; ok {
+			db, err = gorm.Open(postgres.New(postgres.Config{Conn: pool}), entry.GormConfigMap[innerDb.name])
+			sharedPoolsLock.Unlock()
+			if err != nil {
 				return err
-			} else {
+			}
+		} else {
+			db, err = gorm.Open(postgres.Open(dsn), entry.GormConfigMap[innerDb.name])
+			if err != nil {
+				sharedPoolsLock.Unlock()
+				return err
+			}
+
+			inner, err := db.DB()
+			if err != nil {
+				sharedPoolsLock.Unlock()
+				return err
+			}
+			if innerDb.maxOpenConn > 0 {
 				inner.SetMaxOpenConns(innerDb.maxOpenConn)
 			}
-		}
-
-		if innerDb.maxIdleConn > 0 {
-			if inner, err := db.DB(); err != nil {
-				return err
-			} else {
+			if innerDb.maxIdleConn > 0 {
 				inner.SetMaxIdleConns(innerDb.maxIdleConn)
 			}
+			sharedPools[dsn] = inner
+			sharedPoolsLock.Unlock()
 		}
 
 		for i := range innerDb.plugins {
